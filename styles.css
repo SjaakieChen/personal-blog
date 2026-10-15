@@ -23,7 +23,7 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .quote { margin: 18px 0 0; border-left: 2px solid #afc0d0; padding-left: 18px; color: #586064; font-size: 22px; font-style: italic; font-weight: 550; line-height: 1.5; }
 .post-body { margin-top: 32px; }
 .post-body p { margin: 0 0 20px; }
-.post-body strong { font-weight: 650; }
+.post-body strong, .post-body b { font-weight: 650; }
 .post-body img { max-width: 100%; height: auto; }
 .post-body pre { overflow: auto; font-size: 15px; }
 .post-body h2 { font-size: 30px; margin-top: 32px; }

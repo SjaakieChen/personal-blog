@@ -1,37 +1,32 @@
-# Jiaqi Chen's blog
+# Personal blog
 
 Blog: https://sjaakiechen.github.io/personal-blog/
-Writing desk: https://sjaakiechen.github.io/personal-blog/write/
+Editor: https://sjaakiechen.github.io/personal-blog/write/
 
-## Write and publish
+## Writing
 
-1. Open the writing desk in Microsoft Edge. Choose Blog post or Standalone page. Write a title, an optional opening quote, and paragraphs.
-2. Drafts save in this browser. New draft keeps earlier drafts in the Saved drafts menu. Download backups before clearing browser data or changing computers.
-3. Choose Prepare to publish, then Copy post and Open GitHub editor.
-4. Sign in to GitHub if needed. The filename is prefilled. Paste the prepared content into the file editor, choose Commit changes, and commit directly to main.
-5. GitHub Pages builds the update. Posts appear in the dated sidebar and get permanent URLs. Standalone pages get their own URLs, shown in the prepared content.
+Write directly in the page: click the title or body. The editor uses the same stylesheet, font files, reading width, weights, sizes, paragraph spacing, and colours as the published blog. Quote adds an optional opening quote. Select body text and use B, I, or U, or the usual Ctrl+B / Ctrl+I / Ctrl+U shortcuts. Supported rich formatting is paragraphs, line breaks, bold, italic, and underline.
 
-Edit published writing opens existing posts/pages in GitHub. Commit there to update them. Preparing a draft does not publish it; the GitHub commit does. GitHub login provides publishing authorization. No passwords or access tokens are stored in the website. Drafts use plain text and paragraph breaks, with a separate opening quote field.
+Drafts and published posts are in the editor sidebar. Selecting a published post opens a local working draft; the live version changes only when committed through GitHub. New draft preserves earlier work. No date/time input is needed. Publication and last-edit timestamps come from Git automatically; template-only updates do not change them.
 
-Draft storage is local to the browser profile and site origin, not a cloud backup. The writing desk is publicly accessible; only repository writers can commit. The generated example posts are marked sample: true and can be edited or removed through GitHub.
+Publish prepares the file. Copy post, open GitHub, paste into the file editor (replace the entire contents when editing), and commit directly to main. GitHub login authorizes publishing. The site stores no password or access token. Published posts receive their own URLs; Page creates a standalone page instead of a dated post.
 
-## Structure
+## Draft persistence
 
-- _posts/: dated post files; six generated examples demonstrate the template.
-- pages/: standalone pages created through the writing desk.
-- _layouts/: blog shell, individual posts, and standalone pages.
-- index.html: all posts, newest first.
-- write.html and assets/writer*: writing desk and draft handling.
-- styles.css: selected typography, white page, blue headings, and independently scrolling timeline sidebar.
-- assets/fonts/: self-hosted EB Garamond with its OFL license.
-- local-playground/: ignored local design experiment; not deployed.
+Every edit saves synchronously in localStorage, and Saved appears only after a successful write. Drafts survive normal tab/browser closure and computer restarts in the same browser profile. A previous-state backup is retained locally. Clearing site data, private browsing, profile deletion, disk failure, and switching devices can remove or separate these drafts. They are not cloud-synced.
 
-## Publishing and checks
+Backup drafts downloads all drafts, including formatting, as JSON. Restore backup merges them without replacing existing drafts. Keep a backup outside the browser for important writing. The editor preserves older plain-text drafts when upgrading them to rich text.
 
-Pages uses the Publish blog GitHub Actions workflow and Jekyll. Pushes to main rebuild it; .nojekyll must stay absent. _config.yml contains the project base URL. Future dates display immediately rather than being scheduled (future: true).
+## Source and deployment
 
-Run `node --test scripts/writer.test.cjs` for publishing-format and text-escaping checks. GitHub's Pages build validates Jekyll templates. A local Jekyll preview needs the /personal-blog/ base path. The existing port 4173 playground remains a separate local-only design tool.
+- _posts/: actual posts. Generated samples were removed.
+- pages/: standalone pages.
+- _layouts/ and _includes/: shared reading layout and publication/edit times.
+- write.html and assets/writer*: direct-editing page, sidebar, rich document format, and local drafts.
+- writing-index.json: public post/page content for the editor sidebar.
+- assets/fonts/: EB Garamond and its OFL license.
+- local-playground/: ignored design experiment, not deployed.
 
-## Publication and edit timestamps
+The Publish blog workflow builds Jekyll and deploys to Pages after a push to main. scripts/post_timestamps.py reads first/latest file commits from full Git history and adds timestamps to the build copy. These derived fields are never committed back. The original post date is kept when editing.
 
-The build reads each post/page's Git history with full history available. Its first commit supplies the original publication timestamp; later commits to that file supply the Edited timestamp. Styling-only changes do not mark posts edited. Metadata is added only to the build copy, never committed back. Drafts also record their local save time. The editor Date field controls the post filename and sort date; the visible publication time records the actual first commit.
+Checks: node --test scripts/writer.test.cjs and python -m unittest discover -s scripts -p 'test_*.py'.

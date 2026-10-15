@@ -9,33 +9,36 @@ permalink: /write/
 <link rel="stylesheet" href="{{ '/assets/writer.css' | relative_url }}?v={{ site.time | date: '%s' }}">
 <script src="{{ '/assets/writer-core.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/writer.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script></head>
-<body class="writer">
-<header class="writer-header"><a href="{{ '/' | relative_url }}">← Blog</a><span>Your writing desk</span><button id="new-draft" type="button">New draft</button></header>
-<main class="desk">
-<section class="compose" aria-label="Write a post">
-<h1>Write something.</h1><p class="hint">Drafts stay in this browser. When you’re ready, publish through your GitHub account. Publication time and later edits are recorded automatically.</p>
-<label>Saved drafts<select id="drafts" aria-label="Saved drafts"></select></label>
-<form id="post-form">
-<div class="field-row"><label>Type<select id="kind"><option value="post">Blog post</option><option value="page">Standalone page</option></select></label><label>Date<input type="date" id="date" required></label></div>
-<label>Title<input id="title" required maxlength="160" placeholder="A few things worth keeping"></label>
-<label>Opening quote <span class="optional">(optional)</span><input id="quote" maxlength="500" placeholder="A thought to begin with"></label>
-<label>Your words<textarea id="body" rows="14" required placeholder="Start here. Leave a blank line between paragraphs."></textarea></label>
-<p id="save-status" class="hint" role="status"></p>
-<div class="actions"><button class="primary" type="submit">Prepare to publish</button><button id="download" type="button">Download draft</button></div>
-</form>
+<body class="writer" data-index="{{ '/writing-index.json' | relative_url }}">
+<div class="blog-shell">
+<aside class="sidebar" aria-label="Writing navigation">
+<div class="desk-links"><a href="{{ '/' | relative_url }}">← Blog</a><button id="new-draft" type="button">New draft</button></div>
+<nav id="writing-nav" class="timeline" aria-label="Drafts and published posts"></nav>
+<p id="index-status" class="side-status" role="status"></p>
+</aside>
+<main class="main" id="writing-main">
+<div class="editor-tools" role="toolbar" aria-label="Text formatting">
+<button data-command="bold" type="button" aria-label="Bold" aria-pressed="false"><b>B</b></button>
+<button data-command="italic" type="button" aria-label="Italic" aria-pressed="false"><i>I</i></button>
+<button data-command="underline" type="button" aria-label="Underline" aria-pressed="false"><u>U</u></button>
+<button id="add-quote" type="button">Quote</button>
+<select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Page</option></select>
+<button id="publish" class="primary" type="button">Publish</button>
+<button id="download" type="button">Backup drafts</button>
+<button id="restore" type="button">Restore backup</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
+</div>
+<div class="reading-column">
+<article class="post" aria-label="Editable post preview">
+<h1 id="title" contenteditable="plaintext-only" role="textbox" aria-label="Post title" data-placeholder="Title" spellcheck="true"></h1>
+<div class="post-date" id="post-time">Publication time is added automatically.</div>
+<blockquote id="quote" class="quote editable-quote" contenteditable="plaintext-only" role="textbox" aria-label="Opening quote" data-placeholder="Opening quote (optional)" spellcheck="true"></blockquote>
+<div id="body" class="post-body" contenteditable="true" role="textbox" aria-label="Post body" aria-multiline="true" data-placeholder="Start writing…" spellcheck="true"></div>
+</article>
+<p id="save-status" class="editor-status" role="status"></p>
 <section id="publish-panel" class="publish-panel" hidden aria-label="Publish with GitHub">
-<h2>Publish with GitHub</h2>
-<ol><li>Copy your prepared post below.</li><li>Open GitHub and sign in if asked. Paste into the file editor, replacing existing contents when updating a post.</li><li>Choose <strong>Commit changes</strong> and commit directly to <strong>main</strong>. Your site updates after the build finishes.</li></ol>
-<p class="hint">Publishing makes this content public. Only your GitHub account and repository collaborators can publish.</p>
+<h2>Publish with GitHub</h2><p>Copy your post, open GitHub, paste into the editor, then choose <strong>Commit changes</strong>. For an existing post, replace the file’s contents. The publication and edit times are recorded automatically.</p>
 <label>Filename<input id="filename" readonly></label>
-<label>Prepared post<textarea id="prepared" rows="7" readonly></textarea></label>
-<div class="actions"><button id="copy" type="button">Copy post</button><a id="github-publish" class="button primary" target="_blank" rel="noopener noreferrer">Open GitHub editor ↗</a></div>
-<p id="copy-status" class="hint" role="status"></p>
+<details><summary>Prepared post</summary><textarea id="prepared" aria-label="Prepared post" readonly rows="8"></textarea></details>
+<div class="actions"><button id="copy" type="button">Copy post</button><a id="github-publish" class="button primary" target="_blank" rel="noopener noreferrer">Open GitHub editor ↗</a></div><p id="copy-status" role="status"></p>
 </section>
-<details class="manage"><summary>Edit published writing</summary><ul>
-{% for post in site.posts %}<li><a data-published-path="{{ post.path | escape }}" href="https://github.com/SjaakieChen/personal-blog/edit/main/{{ post.path }}" target="_blank" rel="noopener noreferrer">{{ post.title | escape }}</a></li>{% endfor %}
-{% for item in site.pages %}{% if item.layout == 'page' and item.url != '/404.html' %}<li><a data-published-path="{{ item.path | escape }}" href="https://github.com/SjaakieChen/personal-blog/edit/main/{{ item.path }}" target="_blank" rel="noopener noreferrer">{{ item.title | escape }}</a></li>{% endif %}{% endfor %}
-</ul><p class="hint">Opens GitHub’s editor. Commit changes to update the published page.</p></details>
-</section>
-<section class="writer-preview" aria-label="Post preview"><div class="preview-label">Preview</div><article class="post"><h1 id="preview-title">Your title</h1><time class="post-date" id="preview-date"></time><blockquote class="quote" id="preview-quote" hidden></blockquote><div class="post-body" id="preview-body"><p>Your words will appear here.</p></div></article></section>
-</main></body></html>
+</div></main></div></body></html>

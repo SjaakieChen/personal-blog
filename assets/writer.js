@@ -1,67 +1,155 @@
 (() => {
   'use strict';
-  const $ = id => document.getElementById(id);
-  const fields = ['kind','date','title','quote','body'];
-  const key = 'jiaqi-writing-desk-v1';
-  let drafts = [], active, storageError = false;
-  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-  const newDraft = () => ({id:crypto.randomUUID(),kind:'post',date:today(),title:'',quote:'',body:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+  const $=id=>document.getElementById(id), core=BlogWriter;
+  const key='jiaqi-writing-desk-v1', backupKey=key+'-backup';
+  let drafts=[], active, published=[], selectionRange=null, saveFailed=false;
+  const newDraft=()=>({id:crypto.randomUUID(),kind:'post',title:'',quote:'',doc:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+  function acceptDraft(d) {
+    return d && typeof d.id==='string' && typeof d.title==='string' && typeof d.quote==='string' && ['post','page'].includes(d.kind) && (core.validDocument(d.doc) || typeof d.body==='string');
+  }
+  function restore(value) {
+    if(!value || !Array.isArray(value.drafts) || !value.drafts.every(acceptDraft)) throw new Error('Invalid draft backup.');
+    drafts=value.drafts.map(d=>({...d,doc:d.doc || core.plainDocument(d.body)})); active=value.active;
+  }
   try {
-    const saved = JSON.parse(localStorage.getItem(key) || 'null');
-    if (saved && Array.isArray(saved.drafts)) {
-      drafts = saved.drafts.filter(d => d && typeof d.id === 'string' && fields.every(f => typeof d[f] === 'string') && ['post','page'].includes(d.kind));
-      active = saved.active;
+    const saved=localStorage.getItem(key);
+    if(saved) { try { restore(JSON.parse(saved)); } catch { restore(JSON.parse(localStorage.getItem(backupKey))); } }
+  } catch { $('index-status').textContent='Could not read stored drafts. Restore a backup if needed.'; saveFailed=true; }
+  if(!drafts.length) drafts.push(newDraft());
+  if(!drafts.some(d=>d.id===active)) active=drafts[0].id;
+  const current=()=>drafts.find(d=>d.id===active);
+  function readDocument(container) {
+    const blocks=[]; let runs=[];
+    const flush=()=>{if(runs.length){blocks.push({runs});runs=[];}};
+    function walk(node,marks={}) {
+      if(node.nodeType===Node.TEXT_NODE) {
+        if(node.parentNode===container && !node.textContent.trim()) return;
+        if(node.textContent) runs.push({text:node.textContent,...marks}); return;
+      }
+      if(node.nodeType!==Node.ELEMENT_NODE) return;
+      const tag=node.tagName.toLowerCase();
+      if(['script','style','iframe','object','svg','math','img','video','audio'].includes(tag)) return;
+      if(tag==='br') { runs.push({text:'\n',...marks});return; }
+      const block=['p','div','li','h1','h2','h3','blockquote'].includes(tag);
+      if(block) flush();
+      const next={...marks};
+      if(['b','strong'].includes(tag) || (node.style.fontWeight==='bold' || Number(node.style.fontWeight)>=600)) next.bold=true;
+      if(['i','em'].includes(tag) || node.style.fontStyle==='italic') next.italic=true;
+      if(tag==='u' || node.style.textDecoration.includes('underline')) next.underline=true;
+      const before=blocks.length;
+      node.childNodes.forEach(child=>walk(child,next));
+      if(block) {flush(); if(blocks.length===before) blocks.push({runs:[{text:''}]});}
     }
-  } catch { storageError = true; }
-  if (!drafts.length) drafts.push(newDraft());
-  if (!drafts.some(d => d.id === active)) active = drafts[0].id;
-  const current = () => drafts.find(d => d.id === active);
+    container.childNodes.forEach(child=>walk(child)); flush(); return blocks;
+  }
   function save() {
-    if (storageError) { $('save-status').textContent = 'Browser saving is unavailable. Download your draft to keep a copy.'; return; }
-    try { localStorage.setItem(key, JSON.stringify({drafts,active})); const stamp = current().updatedAt; $('save-status').textContent = (stamp ? 'Draft saved ' + new Date(stamp).toLocaleString('en-GB') + '. ' : 'Draft saved. ') + 'Stored in this browser; download a copy to keep a backup.'; }
-    catch { $('save-status').textContent = 'Could not save in this browser. Download your draft to keep it.'; }
-  }
-  function list() {
-    $('drafts').replaceChildren(...drafts.map(d => { const option = document.createElement('option'); option.value = d.id; option.textContent = d.title || 'Untitled draft'; option.selected = d.id === active; return option; }));
-  }
-  function preview() {
-    const draft = current();
-    $('preview-title').textContent = draft.title || 'Your title';
-    $('preview-date').textContent = draft.date && !Number.isNaN(Date.parse(draft.date)) ? new Date(draft.date + 'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
-    $('preview-date').hidden = draft.kind === 'page';
-    $('preview-quote').textContent = '“' + draft.quote + '”';
-    $('preview-quote').hidden = !draft.quote.trim();
-    $('preview-body').replaceChildren(...(draft.body.trim() || 'Your words will appear here.').split(/\n\s*\n/).map(text => { const p = document.createElement('p'); p.textContent = text; return p; }));
-    $('publish-panel').hidden = true;
-  }
-  function load() { fields.forEach(f => { $(f).value = current()[f]; }); list(); preview(); }
-  fields.forEach(f => $(f).addEventListener('input', () => { current()[f] = $(f).value; current().updatedAt = new Date().toISOString(); preview(); list(); save(); }));
-  $('drafts').addEventListener('change', () => { active = $('drafts').value; load(); save(); });
-  $('new-draft').addEventListener('click', () => { const draft = newDraft(); drafts.unshift(draft); active = draft.id; load(); save(); $('title').focus(); });
-  $('post-form').addEventListener('submit', event => {
-    event.preventDefault();
+    if(saveFailed) { $('save-status').textContent='Autosave unavailable. Use Backup drafts before closing.'; return; }
     try {
-      const post = BlogWriter.prepare(current());
-      $('filename').value = post.filename;
-      $('prepared').value = post.content;
-      const existing = Array.from(document.querySelectorAll('[data-published-path]')).find(link => link.dataset.publishedPath === post.filename);
-      $('github-publish').href = existing ? existing.href : post.url;
-      $('copy-status').textContent = '';
-      $('publish-panel').hidden = false;
-      $('publish-panel').scrollIntoView({block:'start',behavior:'smooth'});
-    } catch (error) { $('save-status').textContent = error.message; }
+      const previous=localStorage.getItem(key);
+      if(previous) localStorage.setItem(backupKey,previous);
+      localStorage.setItem(key,JSON.stringify({version:2,drafts,active}));
+      $('save-status').textContent='Saved on this device'+(current().updatedAt?' · '+new Date(current().updatedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
+    } catch { $('save-status').textContent='Could not save. Use Backup drafts before closing.'; }
+  }
+  function renderNav() {
+    const nav=$('writing-nav'); nav.replaceChildren();
+    function heading(text) {const el=document.createElement('span');el.className='nav-date';el.textContent=text;nav.append(el);}
+    function item(title,id,click,label) {
+      const b=document.createElement('button');b.type='button';b.textContent=title || 'Untitled draft';
+      if(id===active) b.setAttribute('aria-current','page');
+      if(label) {const small=document.createElement('span');small.className='draft-label';small.textContent=label;b.append(small);}
+      b.addEventListener('click',click);nav.append(b);
+    }
+    heading('Drafts');
+    drafts.forEach(d=>item(d.title,d.id,()=>{active=d.id;load();save();},d.sourcePath?'Unpublished edits':null));
+    if(published.length) heading('Published');
+    published.forEach(entry=>item(entry.title,entry.path,()=>openPublished(entry)));
+  }
+  function timestamp(entry) {
+    if(!entry.publishedAt) {$('post-time').textContent='Publication time is added automatically.';return;}
+    const format=s=>{const d=new Date(s);return new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',day:'numeric',month:'long',year:'numeric'}).format(d)+' · '+new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}).format(d);};
+    $('post-time').textContent=format(entry.publishedAt)+(entry.editedAt?' · Edited '+format(entry.editedAt):'');
+  }
+  function empties() {for(const id of ['title','quote','body']) $(id).dataset.empty=String(!$(id).textContent.trim());}
+  function load() {
+    const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
+    $('body').innerHTML=core.render(d.doc);$('quote').hidden=!d.quote.trim();$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath;
+    $('publish-panel').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
+  }
+  function changed() {
+    const d=current();d.title=$('title').textContent;d.quote=$('quote').textContent;d.doc=readDocument($('body'));d.kind=$('kind').value;d.updatedAt=new Date().toISOString();
+    $('publish-panel').hidden=true;empties();renderNav();save();
+  }
+  for(const id of ['title','quote','body']) $(id).addEventListener('input',changed);
+  for(const id of ['title','quote']) $(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('body').focus();}});
+  $('kind').addEventListener('change',changed);
+  $('add-quote').addEventListener('click',()=>{$('quote').hidden=false;$('quote').focus();});
+  $('quote').addEventListener('blur',()=>{if(!$('quote').textContent.trim())$('quote').hidden=true;});
+  $('body').addEventListener('paste',e=>{
+    e.preventDefault(); const html=e.clipboardData.getData('text/html'); let doc;
+    if(html) {const template=document.createElement('template');template.innerHTML=html;doc=readDocument(template.content);}
+    else doc=core.plainDocument(e.clipboardData.getData('text/plain'));
+    document.execCommand('insertHTML',false,core.render(doc));changed();
   });
-  $('copy').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText($('prepared').value); $('copy-status').textContent = 'Copied. Open GitHub and paste into the file editor.'; }
-    catch { $('prepared').focus(); $('prepared').select(); $('copy-status').textContent = 'Press Ctrl+C to copy the selected post, then open GitHub.'; }
+  $('body').addEventListener('drop',e=>e.preventDefault());
+  document.execCommand('defaultParagraphSeparator',false,'p');
+  document.execCommand('styleWithCSS',false,false);
+  document.addEventListener('selectionchange',()=>{
+    const s=window.getSelection();
+    if(s.rangeCount && $('body').contains(s.anchorNode) && $('body').contains(s.focusNode)) {
+      selectionRange=s.getRangeAt(0).cloneRange();
+      document.querySelectorAll('[data-command]').forEach(b=>b.setAttribute('aria-pressed',String(document.queryCommandState(b.dataset.command))));
+    }
   });
-  $('download').addEventListener('click', () => {
-    const data = current();
-    // A text backup also works for unfinished drafts that cannot yet be published.
-    let filename = 'unfinished-draft.txt', content = [data.title,data.date,data.quote,data.body].join('\n\n');
-    try { const prepared = BlogWriter.prepare(data); filename = prepared.filename.split('/').pop(); content = prepared.content; } catch {}
-    const url = URL.createObjectURL(new Blob([content],{type:'text/plain;charset=utf-8'}));
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
+  document.querySelectorAll('[data-command]').forEach(button=>{
+    button.addEventListener('mousedown',e=>e.preventDefault());
+    button.addEventListener('click',()=>{
+      $('body').focus();
+      if(selectionRange && $('body').contains(selectionRange.commonAncestorContainer)) {const s=window.getSelection();s.removeAllRanges();s.addRange(selectionRange);}
+      document.execCommand(button.dataset.command,false,null);changed();
+    });
   });
-  load(); save();
+  $('new-draft').addEventListener('click',()=>{const d=newDraft();drafts.unshift(d);active=d.id;load();save();$('title').focus();});
+  function openPublished(entry) {
+    const existing=drafts.find(d=>d.sourcePath===entry.path);
+    if(existing) active=existing.id;
+    else {
+      const template=document.createElement('template');template.innerHTML=entry.html;
+      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),sourcePath:entry.path,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
+      drafts.unshift(d);active=d.id;
+    }
+    load();save();
+  }
+  $('publish').addEventListener('click',()=>{
+    try {
+      changed();const d=current(), post=core.prepare(d);d.targetPath=post.filename;
+      const existing=published.find(p=>p.path===post.filename);if(existing) {d.sourcePath=existing.path;d.originalDate=existing.date;d.permalink=existing.permalink;}
+      const prepared=core.prepare(d);$('filename').value=prepared.filename;$('prepared').value=prepared.content;$('github-publish').href=prepared.url;$('copy-status').textContent='';$('publish-panel').hidden=false;save();$('publish-panel').scrollIntoView({block:'start'});
+    } catch(e) {$('save-status').textContent=e.message;}
+  });
+  $('copy').addEventListener('click',async()=>{
+    try {await navigator.clipboard.writeText($('prepared').value);$('copy-status').textContent='Copied. Open GitHub and paste.';}
+    catch {$('prepared').parentElement.open=true;$('prepared').focus();$('prepared').select();$('copy-status').textContent='Press Ctrl+C to copy the selected post.';}
+  });
+  $('download').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify({version:2,drafts,active},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='blog-drafts-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  $('restore').addEventListener('click',()=>$('restore-file').click());
+  $('restore-file').addEventListener('change',async()=>{
+    const file=$('restore-file').files[0];if(!file)return;
+    try {
+      if(file.size>10000000)throw new Error('Backup is too large.');
+      const data=JSON.parse(await file.text());if(!data || !Array.isArray(data.drafts) || !data.drafts.every(acceptDraft))throw new Error('Invalid backup.');
+      for(const incoming of data.drafts) {
+        const same=drafts.find(d=>d.id===incoming.id);
+        if(same && JSON.stringify(same)===JSON.stringify(incoming))continue;
+        drafts.push({...incoming,id:same?crypto.randomUUID():incoming.id,doc:incoming.doc || core.plainDocument(incoming.body)});
+      }
+      saveFailed=false;renderNav();save();$('index-status').textContent='Backup restored. Existing drafts kept.';
+    }catch(e){$('index-status').textContent=e.message;}finally{$('restore-file').value='';}
+  });
+  load();save();
+  fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
+    published=[...(data.posts || []),...(data.pages || [])];renderNav();
+  }).catch(()=>{$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});
 })();

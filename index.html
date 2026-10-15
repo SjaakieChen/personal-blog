@@ -6,6 +6,6 @@ home: true
 <article class="post" id="{{ post.slug | escape }}">
 {% if forloop.first %}<h1>{% else %}<h2>{% endif %}<a class="post-title" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>{% if forloop.first %}</h1>{% else %}</h2>{% endif %}
 {% include post-time.html entry=post %}
-{% if post.quote %}<blockquote class="quote">“{{ post.quote | escape }}”</blockquote>{% endif %}
+{% if post.quote and post.quote != '' %}<blockquote class="quote">“{{ post.quote | escape }}”</blockquote>{% endif %}
 <div class="post-body">{{ post.content }}</div></article>
 {% endfor %}
