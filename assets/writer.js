@@ -44,7 +44,8 @@
       const post = BlogWriter.prepare(current());
       $('filename').value = post.filename;
       $('prepared').value = post.content;
-      $('github-publish').href = post.url;
+      const existing = Array.from(document.querySelectorAll('[data-published-path]')).find(link => link.dataset.publishedPath === post.filename);
+      $('github-publish').href = existing ? existing.href : post.url;
       $('copy-status').textContent = '';
       $('publish-panel').hidden = false;
       $('publish-panel').scrollIntoView({block:'start',behavior:'smooth'});
