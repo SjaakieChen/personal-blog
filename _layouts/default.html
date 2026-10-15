@@ -15,5 +15,5 @@
 <a href="{% if page.home %}#{{ post.slug | escape }}{% else %}{{ post.url | relative_url }}{% endif %}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
 {% endfor %}</nav></aside>
 <main class="main" id="posts" tabindex="-1"><div class="reading-column">{{ content }}</div>
-<footer class="site-footer"><a href="{{ '/' | relative_url }}">All posts</a><a href="{{ '/write/' | relative_url }}">Write</a></footer></main>
+</main>
 </div></body></html>
