@@ -6,6 +6,8 @@ home: true
 <article class="post" id="{{ post.slug | escape }}">
 {% if forloop.first %}<h1>{% else %}<h2>{% endif %}<a class="post-title" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>{% if forloop.first %}</h1>{% else %}</h2>{% endif %}
 {% include post-time.html entry=post %}
-{% if post.quote and post.quote != '' %}<blockquote class="quote">“{{ post.quote | escape }}”</blockquote>{% endif %}
-<div class="post-body">{{ post.content }}</div></article>
+{% include quote.html entry=post %}
+<div class="post-body" data-post-preview id="preview-{{ post.slug | escape }}">{{ post.content }}</div>
+<button class="show-more" type="button" aria-expanded="false" aria-controls="preview-{{ post.slug | escape }}" hidden>Show more</button></article>
 {% endfor %}
+<script src="{{ '/assets/feed.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>

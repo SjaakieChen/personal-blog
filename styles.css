@@ -27,6 +27,18 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .post-body img { max-width: 100%; height: auto; }
 .post-body pre { overflow: auto; font-size: 15px; }
 .post-body h2 { font-size: 30px; margin-top: 32px; }
+.citation { font-size: .65em; font-style: normal; line-height: 0; vertical-align: super; white-space: nowrap; }
+.citation a { text-decoration: none; }
+.references { border-top: 1px solid #dde0e1; margin-top: 36px; padding-top: 20px; font-size: 17px; line-height: 1.6; }
+.references h2, .post-body .references h2 { font-size: 24px; margin: 0 0 14px; }
+.references ol { padding-left: 25px; margin: 0; }
+.references li { padding-left: 5px; margin-bottom: 14px; scroll-margin-top: 30px; }
+.references li:target { background: #edf4f9; }
+.references li p { margin: 4px 0 0; color: #5e666a; }
+.reference-copy { margin-left: 8px; font-size: .9em; }
+.quote-source { margin-top: 5px; padding-left: 18px; }
+.show-more { margin-top: 16px; padding: 0; border: 0; background: none; color: var(--blue); font: inherit; font-size: 17px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.post-collapsed { max-height: 560px; overflow: hidden; mask-image: linear-gradient(#000 85%,transparent); }
 .site-footer { display: flex; gap: 24px; margin-top: 64px; font-size: 15px; font-weight: 400; }
 .skip-link { position: fixed; top: -100px; left: 12px; z-index: 5; padding: 8px 16px; background: white; }
 .skip-link:focus { top: 12px; }

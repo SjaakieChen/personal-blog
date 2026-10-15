@@ -4,6 +4,6 @@ layout: default
 <article class="post" id="{{ page.slug | escape }}">
 <h1>{{ page.title | escape }}</h1>
 {% include post-time.html entry=page %}
-{% if page.quote and page.quote != '' %}<blockquote class="quote">“{{ page.quote | escape }}”</blockquote>{% endif %}
+{% include quote.html entry=page %}
 <div class="post-body">{{ content }}</div>
 </article>

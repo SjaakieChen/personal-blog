@@ -2,7 +2,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {prepare: build, render} = require('../assets/writer-core.js');
 const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
-const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'A quiet beginning',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
+const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
+const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
+test('quotes require a source, while repeated citations share a target',()=>{
+  assert.throws(()=>prepare({...draft,quote:'Quoted text'}),/reference for the opening quote/);
+  assert.throws(()=>prepare({...draft,doc:[{runs:[{text:'Quoted',quoted:true}]}]}),/quotation and citation/);
+  const p=prepare({...draft,references,quote:'Quoted text',quoteReference:'source-1',doc:[{runs:[{text:'One',reference:'source-1'},{text:'Two',reference:'source-1',locator:'p. 2'}]}]});
+  assert.equal((p.content.match(/href="#ref-ab123456-7890-1"/g)||[]).length,2);
+  assert.match(p.content,/id="ref-ab123456-7890-1"/);
+  assert.match(p.content,/Paper &lt;title&gt;/);
+  assert.match(p.content,/Saved copy/);
+});
+test('rejects unsafe source URLs and unresolved citations',()=>{
+  for(const url of ['javascript:alert(1)','data:text/html,bad','//evil.example','/\\evil.example'])assert.throws(()=>prepare({...draft,references:[{...references[0],url}]}),/valid source link/);
+  assert.throws(()=>prepare({...draft,doc:[{runs:[{text:'Text',reference:'missing'}]}]}),/citation needs a reference/);
+});
 test('prepares a post for the correct repository and path', () => {
   const p = prepare(draft);
   assert.equal(p.filename, '_posts/2026-10-15-a-new-thought-ab123456.md');
@@ -11,7 +25,7 @@ test('prepares a post for the correct repository and path', () => {
   assert.match(p.content, /<p>One paragraph.<\/p>\n<p>Another paragraph.<\/p>/);
 });
 test('keeps HTML, Liquid, and YAML-looking input as text', () => {
-  const p = prepare({...draft,title:'Hello\nlayout: evil',body:'<script>alert(1)</script>\n{{ site.secret }}\n{% include bad %}',quote:'"\n---'});
+  const p = prepare({...draft,title:'Hello\nlayout: evil',body:'<script>alert(1)</script>\n{{ site.secret }}\n{% include bad %}',quote:''});
   assert.ok(!p.content.includes('<script>'));
   assert.ok(!p.content.includes('{{'));
   assert.ok(!p.content.includes('{%'));

@@ -30,3 +30,11 @@ Backup drafts downloads all drafts, including formatting, as JSON. Restore backu
 The Publish blog workflow builds Jekyll and deploys to Pages after a push to main. scripts/post_timestamps.py reads first/latest file commits from full Git history and adds timestamps to the build copy. These derived fields are never committed back. The original post date is kept when editing.
 
 Checks: node --test scripts/writer.test.cjs and python -m unittest discover -s scripts -p 'test_*.py'.
+
+## References
+
+Posts are the writing feed. Reference pages are supporting material, linked from citations rather than included in the feed. In the editor, Reference opens the source picker: reuse a source, choose a published reference page, or enter a URL/PDF link with title, author and publication details. Add an optional saved-copy link and a page/section locator. Select body text and check Quote the selected text to insert a cited quotation. The opening quote has its own Choose quote source control. Publishing requires sources for opening quotes and text marked as quotations.
+
+Sources appear as numbered inline citations and a References list, using the same fonts and layout in the editor and published page. Edit source changes the shared source entry. References, quote attribution and formatted citations are included in local drafts and JSON backups, and in published metadata so they can be reopened for editing. New reference page creates a supporting-page draft; publish it before selecting it from another post. PDF links and saved-copy links do not upload or archive a document automatically.
+
+The home feed collapses long posts with Show more / Show less; individual post pages always show the complete article. Clicking a citation expands a collapsed article before following its reference target. Without JavaScript, the full text is available.

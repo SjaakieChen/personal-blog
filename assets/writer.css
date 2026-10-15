@@ -21,4 +21,13 @@ button,.button,select { border: 1px solid #a4b3be; border-radius: 0; padding: 7p
 .publish-panel input,.publish-panel textarea { display: block; width: 100%; padding: 10px; border: 1px solid #a4b3be; background: white; color: #293338; font: 12px/1.5 monospace; }
 .publish-panel details { margin-top: 16px; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.quote-source button,.edit-reference { border: 0; padding: 0; font-size: 12px; background: transparent; text-decoration: underline; }
+.edit-reference { display: block; margin-top: 5px; }
+dialog { border: 1px solid #afc0d0; padding: 28px; width: min(550px,calc(100% - 32px)); max-height: 85vh; overflow: auto; color: var(--ink); }
+dialog::backdrop { background: #17252f66; }
+dialog h2 { font-size: 28px; margin-bottom: 20px; }
+dialog label { display: block; margin: 12px 0; font: 13px/1.5 system-ui,sans-serif; }
+dialog input:not([type=checkbox]),dialog select,dialog textarea { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid #a4b3be; background: white; color: var(--ink); font: 14px/1.5 system-ui,sans-serif; }
+.check-label { display: flex; gap: 8px; }
+#reference-error { font: 13px/1.5 system-ui,sans-serif; color: #954530; }
 @media(max-width:700px) { .desk-links { margin-top: 0; } .editor-tools { margin-top: -12px; margin-bottom: 28px; } }
