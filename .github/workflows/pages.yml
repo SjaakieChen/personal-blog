@@ -1,0 +1,44 @@
+name: Publish blog
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: blog-pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check writing and timestamp handling
+        run: |
+          node --test scripts/writer.test.cjs
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Read publication and edit times from Git
+        run: python3 scripts/post_timestamps.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -2,5 +2,6 @@
 layout: default
 ---
 <article class="post"><h1>{{ page.title | escape }}</h1>
+{% if page.published_at %}{% include post-time.html entry=page %}{% endif %}
 {% if page.quote %}<blockquote class="quote">“{{ page.quote | escape }}”</blockquote>{% endif %}
 <div class="post-body">{{ content }}</div></article>

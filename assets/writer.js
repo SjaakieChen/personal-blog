@@ -5,7 +5,7 @@
   const key = 'jiaqi-writing-desk-v1';
   let drafts = [], active, storageError = false;
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-  const newDraft = () => ({id:crypto.randomUUID(),kind:'post',date:today(),title:'',quote:'',body:''});
+  const newDraft = () => ({id:crypto.randomUUID(),kind:'post',date:today(),title:'',quote:'',body:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   try {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
     if (saved && Array.isArray(saved.drafts)) {
@@ -18,7 +18,7 @@
   const current = () => drafts.find(d => d.id === active);
   function save() {
     if (storageError) { $('save-status').textContent = 'Browser saving is unavailable. Download your draft to keep a copy.'; return; }
-    try { localStorage.setItem(key, JSON.stringify({drafts,active})); $('save-status').textContent = 'Draft saved in this browser. Download a copy before clearing browser data.'; }
+    try { localStorage.setItem(key, JSON.stringify({drafts,active})); const stamp = current().updatedAt; $('save-status').textContent = (stamp ? 'Draft saved ' + new Date(stamp).toLocaleString('en-GB') + '. ' : 'Draft saved. ') + 'Stored in this browser; download a copy to keep a backup.'; }
     catch { $('save-status').textContent = 'Could not save in this browser. Download your draft to keep it.'; }
   }
   function list() {
@@ -35,7 +35,7 @@
     $('publish-panel').hidden = true;
   }
   function load() { fields.forEach(f => { $(f).value = current()[f]; }); list(); preview(); }
-  fields.forEach(f => $(f).addEventListener('input', () => { current()[f] = $(f).value; preview(); list(); save(); }));
+  fields.forEach(f => $(f).addEventListener('input', () => { current()[f] = $(f).value; current().updatedAt = new Date().toISOString(); preview(); list(); save(); }));
   $('drafts').addEventListener('change', () => { active = $('drafts').value; load(); save(); });
   $('new-draft').addEventListener('click', () => { const draft = newDraft(); drafts.unshift(draft); active = draft.id; load(); save(); $('title').focus(); });
   $('post-form').addEventListener('submit', event => {

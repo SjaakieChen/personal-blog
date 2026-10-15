@@ -28,6 +28,10 @@ Draft storage is local to the browser profile and site origin, not a cloud backu
 
 ## Publishing and checks
 
-Pages uses Jekyll from the root of main. Pushes to main rebuild it; .nojekyll must stay absent. _config.yml contains the project base URL. Future dates display immediately rather than being scheduled (future: true).
+Pages uses the Publish blog GitHub Actions workflow and Jekyll. Pushes to main rebuild it; .nojekyll must stay absent. _config.yml contains the project base URL. Future dates display immediately rather than being scheduled (future: true).
 
 Run `node --test scripts/writer.test.cjs` for publishing-format and text-escaping checks. GitHub's Pages build validates Jekyll templates. A local Jekyll preview needs the /personal-blog/ base path. The existing port 4173 playground remains a separate local-only design tool.
+
+## Publication and edit timestamps
+
+The build reads each post/page's Git history with full history available. Its first commit supplies the original publication timestamp; later commits to that file supply the Edited timestamp. Styling-only changes do not mark posts edited. Metadata is added only to the build copy, never committed back. Drafts also record their local save time. The editor Date field controls the post filename and sort date; the visible publication time records the actual first commit.
