@@ -1,5 +1,6 @@
 """Add publication/edit times from Git to the build copy, without new commits."""
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import json
 import re
@@ -25,6 +26,9 @@ def stamp(root):
             if not match:
                 raise ValueError(f'Missing front matter: {path}')
             published, edited = timestamps(root, path.relative_to(root))
+            published = datetime.fromisoformat(published).astimezone(ZoneInfo('Europe/London')).isoformat()
+            if edited:
+                edited = datetime.fromisoformat(edited).astimezone(ZoneInfo('Europe/London')).isoformat()
             # Build-derived fields cannot be supplied by an author to mask edits.
             metadata = re.sub(r'^(published_at|last_edited_at|source_sha):[^\n]*\n?', '', match[1], flags=re.M).rstrip()
             sha = subprocess.check_output(['git', 'rev-parse', 'HEAD:'+path.relative_to(root).as_posix()], cwd=root, text=True).strip()

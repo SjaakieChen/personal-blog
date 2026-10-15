@@ -1,5 +1,5 @@
 {% assign published = include.entry.published_at | default: include.entry.date %}
 <div class="post-date">
-<time datetime="{{ published | date_to_xmlschema }}">{{ published | date: '%-d %B %Y · %H:%M %Z' }}</time>
-{% if include.entry.last_edited_at %}<span class="edited-time"> · Edited <time datetime="{{ include.entry.last_edited_at | date_to_xmlschema }}">{{ include.entry.last_edited_at | date: '%-d %B %Y · %H:%M %Z' }}</time></span>{% endif %}
+<time datetime="{{ published | date_to_xmlschema }}">{{ published | date: '%-d %B %Y' }}</time>
+{% if include.entry.last_edited_at %}<span class="edited-time"> · Edited <time datetime="{{ include.entry.last_edited_at | date_to_xmlschema }}">{{ include.entry.last_edited_at | date: '%-d %B %Y' }}</time></span>{% endif %}
 </div>
