@@ -9,6 +9,7 @@ exclude:
   - README.md
   - local-playground
   - scripts
+  - publisher
 defaults:
   - scope:
       path: ""

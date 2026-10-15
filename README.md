@@ -1,7 +1,9 @@
 # Personal blog
 
 Blog: https://sjaakiechen.github.io/personal-blog/
-Editor: https://sjaakiechen.github.io/personal-blog/write/
+Private editor: https://yoga-jiaqi.taile0df21.ts.net:8446/write/
+
+The earlier public editor at https://sjaakiechen.github.io/personal-blog/write/ transfers existing local drafts when opening the private desk.
 
 ## Writing
 
@@ -9,7 +11,7 @@ Write directly in the page: click the title or body. The editor uses the same st
 
 Drafts and published posts are in the editor sidebar. Selecting a published post opens a local working draft; the live version changes only when committed through GitHub. New draft preserves earlier work. No date/time input is needed. Publication and last-edit timestamps come from Git automatically; template-only updates do not change them.
 
-Publish prepares the file. Copy post, open GitHub, paste into the file editor (replace the entire contents when editing), and commit directly to main. GitHub login authorizes publishing. The site stores no password or access token. Published posts receive their own URLs; Page creates a standalone page instead of a dated post.
+Publish sends the post directly through the private Yoga service to GitHub and reports the Pages deployment status. Connect GitHub is a one-time device sign-in; the credential stays on Yoga. The private desk requires the owner’s Tailscale connection. Posts receive their own URLs; Reference page creates supporting material outside the dated feed. See publisher/README.md for operations, security boundaries, and restart details.
 
 ## Draft persistence
 

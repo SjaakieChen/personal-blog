@@ -18,6 +18,103 @@
   if(!drafts.length) drafts.push(newDraft());
   if(!drafts.some(d=>d.id===active)) active=drafts[0].id;
   const current=()=>drafts.find(d=>d.id===active);
+  const privateOrigin='https://yoga-jiaqi.taile0df21.ts.net:8446';
+  const isPrivate=document.body.dataset.privateDesk==='true';
+  let publishing=false, authPolling=false, pendingPublishId=null;
+  async function api(path,body) {
+    const response=await fetch(path,{cache:'no-store',...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error || 'The server could not complete the request.');
+    return data;
+  }
+  function publicationStatus(text,heading='Publish') {
+    $('publish-panel').hidden=false;$('publish-heading').textContent=heading;$('publication-status').textContent=text;
+  }
+  function handoff(shouldPublish) {
+    changed();
+    const desk=window.open(privateOrigin+'/write/?import=1','jiaqi-private-writer');
+    if(!desk){publicationStatus('Allow this site to open the private writing desk, then click Publish again.');return;}
+    publicationStatus('Opening your private desk on Yoga. Tailscale must be connected. Your drafts remain saved here.');
+    const transfer={version:2,drafts,active};
+    function receive(event) {
+      if(event.origin!==privateOrigin || event.source!==desk)return;
+      if(event.data?.type==='blog-desk-ready')desk.postMessage({type:'blog-desk-import',data:transfer,publish:shouldPublish},privateOrigin);
+      if(event.data?.type==='blog-desk-imported'){window.removeEventListener('message',receive);publicationStatus('Drafts transferred. Continue in the private writing desk on Yoga.');}
+    }
+    window.addEventListener('message',receive);setTimeout(()=>window.removeEventListener('message',receive),120000);
+  }
+  async function connectGitHub() {
+    if(!isPrivate){handoff(false);return;}
+    if(authPolling)return;
+    authPolling=true;$('connect-github').disabled=true;
+    try {
+      const session=await api('/api/session');
+      if(session.connected){$('connect-github').textContent='GitHub connected';publicationStatus('Connected as '+session.login+'. Click Publish to send your post.');return;}
+      await api('/api/auth/start',{});
+      publicationStatus('Preparing GitHub sign-in…','Connect GitHub');
+      for(let attempt=0;attempt<300;attempt++) {
+        await new Promise(resolve=>setTimeout(resolve,3000));
+        const state=await api('/api/session');
+        if(state.connected) {
+          $('github-login').hidden=true;$('connect-github').textContent='GitHub connected';
+          publicationStatus('Connected as '+state.login+'. Yoga will remember this connection.');
+          const pending=pendingPublishId;pendingPublishId=null;
+          if(pending && active===pending)await publishCurrent();
+          return;
+        }
+        if(state.code){$('github-code').textContent=state.code;$('github-login').hidden=false;publicationStatus('Finish sign-in on GitHub, then return here.','Connect GitHub');}
+        if(state.error)throw new Error(state.error);
+      }
+      throw new Error('Sign-in timed out. Click Connect GitHub to try again.');
+    }catch(error){publicationStatus(error.message,'Connection needed');}
+    finally{authPolling=false;$('connect-github').disabled=false;}
+  }
+  async function watchDeployment(commit,title) {
+    for(let attempt=0;attempt<36;attempt++) {
+      await new Promise(resolve=>setTimeout(resolve,5000));
+      try {
+        const result=await api('/api/deployment?commit='+encodeURIComponent(commit));
+        if(result.status==='completed') {
+          publicationStatus(result.conclusion==='success'?'“'+title+'” is live.':result.conclusion==='cancelled'?'Saved to GitHub. A newer site update replaced this build.':'Saved to GitHub, but the site build failed. Your writing is safe in GitHub.',result.conclusion==='success'?'Published':'Saved to GitHub');
+          if(result.conclusion==='success')refreshIndex();
+          return;
+        }
+      }catch{publicationStatus('Saved to GitHub. Deployment status is unavailable; the site may still be updating.','Saved to GitHub');return;}
+    }
+    publicationStatus('Saved to GitHub. The site is still updating; check the blog shortly.','Saved to GitHub');
+  }
+  async function publishCurrent() {
+    if(publishing)return;
+    try {
+      changed();const d=current();core.prepare(d);
+      if(!isPrivate){handoff(true);return;}
+      publishing=true;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
+      const session=await api('/api/session');
+      if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
+      // Keep the exact request for a safe retry if the response is lost.
+      const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator]);
+      if(!d.pendingPublication || d.pendingPublication.fingerprint!==fingerprint) {
+        const prepared=core.prepare(d);d.targetPath=prepared.filename;
+        d.pendingPublication={fingerprint,path:prepared.filename,content:prepared.content};
+      }
+      save();publicationStatus('Sending “'+d.title+'” to GitHub…');
+      const prepared=d.pendingPublication;
+      const originalDate=d.kind==='post'?JSON.parse(prepared.content.match(/^date: (.+)$/m)[1]):null;
+      const permalink=d.kind==='page'?JSON.parse(prepared.content.match(/^permalink: (.+)$/m)[1]):null;
+      const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:d.sourceSha || null});
+      const wasPublished=!!d.sourcePath;
+      d.sourcePath=prepared.path;d.sourceSha=result.sha;
+      if(d.kind==='post')d.originalDate=originalDate;
+      else d.permalink=permalink;
+      if(!result.unchanged){if(wasPublished)d.editedAt=result.time;else d.publishedAt=result.time;}
+      delete d.pendingPublication;save();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;}
+      const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
+      $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(d.kind==='page'?d.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
+      publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
+      if(result.commit)watchDeployment(result.commit,d.title);
+    }catch(error){publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
+    finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';}
+  }
   function readDocument(container) {
     const blocks=[]; let runs=[];
     const flush=()=>{if(runs.length){blocks.push({runs});runs=[];}};
@@ -83,7 +180,7 @@
   function load() {
     const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
     $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d));$('quote').hidden=!d.quote.trim();$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
-    $('publish-panel').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
+    $('publish-panel').hidden=true;$('view-published').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
   }
   function changed() {
@@ -126,18 +223,13 @@
     if(existing) active=existing.id;
     else {
       const template=document.createElement('template');template.innerHTML=entry.html;
-      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
+      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
       drafts.unshift(d);active=d.id;
     }
     load();save();
   }
-  $('publish').addEventListener('click',()=>{
-    try {
-      changed();const d=current(), post=core.prepare(d);d.targetPath=post.filename;
-      const existing=published.find(p=>p.path===post.filename);if(existing) {d.sourcePath=existing.path;d.originalDate=existing.date;d.permalink=existing.permalink;}
-      const prepared=core.prepare(d);$('filename').value=prepared.filename;$('prepared').value=prepared.content;$('github-publish').href=prepared.url;$('copy-status').textContent='';$('publish-panel').hidden=false;save();$('publish-panel').scrollIntoView({block:'start'});
-    } catch(e) {$('save-status').textContent=e.message;}
-  });
+  $('publish').addEventListener('click',publishCurrent);
+  $('connect-github').addEventListener('click',connectGitHub);
   let referenceTarget='body', referenceRange=null;
   function renderReferencePreview() {
     const d=current(), refs=d.references || [], key=core.referenceKey(d);
@@ -200,10 +292,6 @@
     }
     changed();
   });
-  $('copy').addEventListener('click',async()=>{
-    try {await navigator.clipboard.writeText($('prepared').value);$('copy-status').textContent='Copied. Open GitHub and paste.';}
-    catch {$('prepared').parentElement.open=true;$('prepared').focus();$('prepared').select();$('copy-status').textContent='Press Ctrl+C to copy the selected post.';}
-  });
   $('download').addEventListener('click',()=>{
     const blob=new Blob([JSON.stringify({version:2,drafts,active},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='blog-drafts-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
@@ -221,8 +309,28 @@
       saveFailed=false;renderNav();save();$('index-status').textContent='Backup restored. Existing drafts kept.';
     }catch(e){$('index-status').textContent=e.message;}finally{$('restore-file').value='';}
   });
-  load();save();
-  fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
+  function refreshIndex(){return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
     published=[...(data.posts || []),...(data.pages || [])];renderNav();
-  }).catch(()=>{$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});
+  }).catch(()=>{$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});}
+  load();save();refreshIndex();
+  if(isPrivate) {
+    $('connect-github').textContent='Connect GitHub';
+    api('/api/session').then(s=>{if(s.connected)$('connect-github').textContent='GitHub connected';}).catch(()=>{});
+    if(window.opener && new URLSearchParams(location.search).has('import')) {
+      const receive=event=>{
+        if(event.origin!=='https://sjaakiechen.github.io' || event.source!==window.opener || event.data?.type!=='blog-desk-import')return;
+        const data=event.data.data;if(!data || !Array.isArray(data.drafts) || !data.drafts.every(acceptDraft))return;
+        for(const incoming of data.drafts) {
+          const existing=drafts.find(d=>d.id===incoming.id);
+          let id=incoming.id;
+          if(existing && JSON.stringify(existing)!==JSON.stringify(incoming))id=crypto.randomUUID();
+          if(!existing || id!==incoming.id)drafts.push({...incoming,id,referenceKey:incoming.referenceKey || incoming.id,doc:incoming.doc || core.plainDocument(incoming.body)});
+          if(incoming.id===data.active)active=id;
+        }
+        load();save();event.source.postMessage({type:'blog-desk-imported'},event.origin);window.removeEventListener('message',receive);
+        history.replaceState(null,'','/write/');if(event.data.publish)publishCurrent();
+      };
+      window.addEventListener('message',receive);window.opener.postMessage({type:'blog-desk-ready'},'https://sjaakiechen.github.io');
+    }
+  }
 })();

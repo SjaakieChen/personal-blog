@@ -26,7 +26,9 @@ def stamp(root):
                 raise ValueError(f'Missing front matter: {path}')
             published, edited = timestamps(root, path.relative_to(root))
             # Build-derived fields cannot be supplied by an author to mask edits.
-            metadata = re.sub(r'^(published_at|last_edited_at):[^\n]*\n?', '', match[1], flags=re.M).rstrip()
+            metadata = re.sub(r'^(published_at|last_edited_at|source_sha):[^\n]*\n?', '', match[1], flags=re.M).rstrip()
+            sha = subprocess.check_output(['git', 'rev-parse', 'HEAD:'+path.relative_to(root).as_posix()], cwd=root, text=True).strip()
+            metadata += '\nsource_sha: ' + json.dumps(sha)
             metadata += '\npublished_at: ' + json.dumps(published)
             if edited:
                 metadata += '\nlast_edited_at: ' + json.dumps(edited)

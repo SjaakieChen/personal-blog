@@ -25,6 +25,7 @@ permalink: /write/
 <button id="add-reference" type="button">Reference</button>
 <select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Reference page</option></select>
 <button id="publish" class="primary" type="button">Publish</button>
+<button id="connect-github" type="button">Open private desk</button>
 <button id="download" type="button">Backup drafts</button>
 <button id="restore" type="button">Restore backup</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
 </div>
@@ -38,11 +39,10 @@ permalink: /write/
 <div id="reference-preview"></div>
 </article>
 <p id="save-status" class="editor-status" role="status"></p>
-<section id="publish-panel" class="publish-panel" hidden aria-label="Publish with GitHub">
-<h2>Publish with GitHub</h2><p>Copy your post, open GitHub, paste into the editor, then choose <strong>Commit changes</strong>. For an existing post, replace the file’s contents. The publication and edit times are recorded automatically.</p>
-<label>Filename<input id="filename" readonly></label>
-<details><summary>Prepared post</summary><textarea id="prepared" aria-label="Prepared post" readonly rows="8"></textarea></details>
-<div class="actions"><button id="copy" type="button">Copy post</button><a id="github-publish" class="button primary" target="_blank" rel="noopener noreferrer">Open GitHub editor ↗</a></div><p id="copy-status" role="status"></p>
+<section id="publish-panel" class="publish-panel" hidden aria-label="Publishing status">
+<h2 id="publish-heading">Publish</h2><p id="publication-status" role="status"></p>
+<div id="github-login" hidden><p>Enter this code on GitHub: <strong id="github-code"></strong></p><a class="button primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a><p>Sign in as SjaakieChen. Yoga remembers your connection; your GitHub credential stays on the private server.</p></div>
+<a id="view-published" hidden target="_blank" rel="noopener noreferrer">View post ↗</a>
 </section>
 </div></main></div>
 <dialog id="reference-dialog" aria-labelledby="reference-heading">
