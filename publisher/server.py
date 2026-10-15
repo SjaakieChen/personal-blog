@@ -111,6 +111,25 @@ def publish(data):
             'time': result['commit']['committer']['date'], 'unchanged': False}
 
 
+def delete_entry(data):
+    path, base_sha = data.get('path'), data.get('baseSha')
+    if not valid_path(path) or not isinstance(base_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', base_sha):
+        raise ValueError('Select a published post or reference page before deleting.')
+    endpoint = f'repos/{REPO}/contents/{path}'
+    try:
+        existing = gh_api(endpoint+'?ref=main')
+    except RuntimeError as error:
+        if getattr(error, 'status', 0) == 404:
+            return {'alreadyRemoved': True}
+        raise
+    if existing['sha'] != base_sha:
+        error = RuntimeError('This post changed elsewhere. Reopen its latest published version before deleting. Your draft is still saved.')
+        error.status = 409
+        raise error
+    result = gh_api(endpoint, 'DELETE', {'message': 'Remove '+path, 'sha': base_sha, 'branch': 'main'})
+    return {'commit': result['commit']['sha'], 'alreadyRemoved': False}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass  # Never log auth codes, post contents, or request query strings.
@@ -184,11 +203,11 @@ class Handler(BaseHTTPRequestHandler):
                         login_process = subprocess.Popen(['gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web', '--insecure-storage'], env=ENV, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                         threading.Thread(target=read_login, args=(login_process,), daemon=True).start()
                 return self.send(200, {'started': True})
-            if self.path == '/api/publish':
+            if self.path in ('/api/publish', '/api/delete'):
                 if not connected():
                     return self.send(401, {'error': 'Sign in to GitHub first.'})
                 with lock:
-                    result = publish(data)
+                    result = publish(data) if self.path == '/api/publish' else delete_entry(data)
                 return self.send(200, result)
             return self.send(404, {'error': 'Not found.'})
         except ValueError as error:

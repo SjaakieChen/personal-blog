@@ -30,4 +30,9 @@ dialog label { display: block; margin: 12px 0; font: 13px/1.5 system-ui,sans-ser
 dialog input:not([type=checkbox]),dialog select,dialog textarea { display: block; width: 100%; margin-top: 4px; padding: 8px; border: 1px solid #a4b3be; background: white; color: var(--ink); font: 14px/1.5 system-ui,sans-serif; }
 .check-label { display: flex; gap: 8px; }
 #reference-error { font: 13px/1.5 system-ui,sans-serif; color: #954530; }
+#delete-post,#confirm-delete { color: #944632; border-color: #bb8c7f; }
+#delete-dialog p { font: 14px/1.7 system-ui,sans-serif; }
+.editor-tools .connection-dot { width: 12px; height: 12px; min-width: 12px; padding: 0; margin: 0 8px; border: 1px solid #9b493d; border-radius: 50%; background: #b65345; }
+.editor-tools .connection-dot[data-connected="true"] { background: #42815b; border-color: #356b4a; }
+.editable-quote { display: inline-block; min-width: 150px; min-height: 1.5em; }
 @media(max-width:700px) { .desk-links { margin-top: 0; } .editor-tools { margin-top: -12px; margin-bottom: 28px; } }

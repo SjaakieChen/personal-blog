@@ -7,7 +7,7 @@ The earlier public editor at https://sjaakiechen.github.io/personal-blog/write/ 
 
 ## Writing
 
-Write directly in the page: click the title or body. The editor uses the same stylesheet, font files, reading width, weights, sizes, paragraph spacing, and colours as the published blog. Quote adds an optional opening quote. Select body text and use B, I, or U, or the usual Ctrl+B / Ctrl+I / Ctrl+U shortcuts. Supported rich formatting is paragraphs, line breaks, bold, italic, and underline.
+Write directly in the page: click the title or body. The editor uses the same stylesheet, font files, reading width, weights, sizes, paragraph spacing, and colours as the published blog. The optional opening quote is always editable below the title. Select body text and use B, I, or U, or the usual Ctrl+B / Ctrl+I / Ctrl+U shortcuts. Supported rich formatting is paragraphs, line breaks, bold, italic, and underline.
 
 Drafts and published posts are in the editor sidebar. Selecting a published post opens a local working draft; the live version changes only when committed through GitHub. New draft preserves earlier work. No date/time input is needed. Publication and last-edit timestamps come from Git automatically; template-only updates do not change them.
 
@@ -17,7 +17,7 @@ Publish sends the post directly through the private Yoga service to GitHub and r
 
 Every edit saves synchronously in localStorage, and Saved appears only after a successful write. Drafts survive normal tab/browser closure and computer restarts in the same browser profile. A previous-state backup is retained locally. Clearing site data, private browsing, profile deletion, disk failure, and switching devices can remove or separate these drafts. They are not cloud-synced.
 
-Backup drafts downloads all drafts, including formatting, as JSON. Restore backup merges them without replacing existing drafts. Keep a backup outside the browser for important writing. The editor preserves older plain-text drafts when upgrading them to rich text.
+Save JSON downloads all drafts, including formatting, as JSON. Import JSON merges them without replacing existing drafts. Keep a backup outside the browser for important writing. The editor preserves older plain-text drafts when upgrading them to rich text.
 
 ## Source and deployment
 
@@ -40,3 +40,5 @@ Posts are the writing feed. Reference pages are supporting material, linked from
 Sources appear as numbered inline citations and a References list, using the same fonts and layout in the editor and published page. Edit source changes the shared source entry. References, quote attribution and formatted citations are included in local drafts and JSON backups, and in published metadata so they can be reopened for editing. New reference page creates a supporting-page draft; publish it before selecting it from another post. PDF links and saved-copy links do not upload or archive a document automatically.
 
 The home feed collapses long posts with Show more / Show less; individual post pages always show the complete article. Clicking a citation expands a collapsed article before following its reference target. Without JavaScript, the full text is available.
+
+Select a published post in the writing sidebar, then Delete post to remove it from the public blog after confirmation. A local draft copy stays available, and Git history preserves the removed version. Deletion checks the original file revision and rejects concurrent changes. The GitHub status control is a green/red dot with an accessible label; click it to inspect or connect.

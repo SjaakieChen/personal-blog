@@ -24,3 +24,5 @@ The public writer's Publish/Open private desk buttons transfer drafts into the p
 Yoga must be powered and online, and the writing device must be connected to Tailscale. The service and saved GitHub connection survive normal service/computer restarts. GitHub revocation, credential expiry or deletion, network loss, or disk loss can require repair or reauthentication. No perpetual-login or independent disk-backup guarantee is made.
 
 Tests: `python -m unittest discover -s scripts -p 'test_*.py'` and `node --test scripts/writer.test.cjs`.
+
+Select a published post in the writing sidebar, then Delete post to remove it from the public blog after confirmation. A local draft copy stays available, and Git history preserves the removed version. Deletion checks the original file revision and rejects concurrent changes. The GitHub status control is a green/red dot with an accessible label; click it to inspect or connect.

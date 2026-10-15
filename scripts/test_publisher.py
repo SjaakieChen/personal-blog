@@ -50,3 +50,26 @@ class PublishingTests(unittest.TestCase):
             self.assertFalse(handler.allowed())
             handler.headers={}
             self.assertFalse(handler.allowed())
+
+    def test_delete_requires_matching_revision_and_keeps_git_history(self):
+        sha='a'*40
+        with patch.object(publisher,'gh_api',side_effect=[{'sha':sha},{'commit':{'sha':'b'*40}}]) as api:
+            result=publisher.delete_entry({'path':'_posts/2026-10-15-test.md','baseSha':sha})
+            self.assertEqual(api.call_args.args[1],'DELETE')
+            self.assertEqual(api.call_args.args[2]['sha'],sha)
+            self.assertEqual(api.call_args.args[2]['branch'],'main')
+            self.assertEqual(result['commit'],'b'*40)
+
+    def test_delete_rejects_stale_or_invalid_targets(self):
+        with patch.object(publisher,'gh_api',return_value={'sha':'b'*40}) as api:
+            with self.assertRaises(RuntimeError):publisher.delete_entry({'path':'pages/source.md','baseSha':'a'*40})
+            self.assertEqual(api.call_count,1)
+        for path in ['../secret','.github/workflows/pages.yml','assets/writer.js']:
+            with self.assertRaises(ValueError):publisher.delete_entry({'path':path,'baseSha':'a'*40})
+        with self.assertRaises(ValueError):publisher.delete_entry({'path':'pages/source.md','baseSha':None})
+
+    def test_delete_retry_is_idempotent(self):
+        missing=RuntimeError('Not found');missing.status=404
+        with patch.object(publisher,'gh_api',side_effect=missing) as api:
+            self.assertTrue(publisher.delete_entry({'path':'pages/source.md','baseSha':'a'*40})['alreadyRemoved'])
+            self.assertEqual(api.call_count,1)

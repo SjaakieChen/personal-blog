@@ -14,13 +14,19 @@
   try {
     const saved=localStorage.getItem(key);
     if(saved) { try { restore(JSON.parse(saved)); } catch { restore(JSON.parse(localStorage.getItem(backupKey))); } }
-  } catch { $('index-status').textContent='Could not read stored drafts. Restore a backup if needed.'; saveFailed=true; }
+  } catch { $('index-status').textContent='Could not read stored drafts. Use Import JSON if needed.'; saveFailed=true; }
   if(!drafts.length) drafts.push(newDraft());
   if(!drafts.some(d=>d.id===active)) active=drafts[0].id;
   const current=()=>drafts.find(d=>d.id===active);
   const privateOrigin='https://yoga-jiaqi.taile0df21.ts.net:8446';
   const isPrivate=document.body.dataset.privateDesk==='true';
   let publishing=false, authPolling=false, pendingPublishId=null;
+  const removedPaths=new Set();
+  function connectionStatus(connected) {
+    $('connect-github').dataset.connected=String(connected);
+    const label=isPrivate?(connected?'GitHub connected':'GitHub disconnected — click to connect'):'Open private writing desk';
+    $('connect-github').setAttribute('aria-label',label);$('connect-github').title=label;
+  }
   async function api(path,body) {
     const response=await fetch(path,{cache:'no-store',...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
     const data=await response.json();
@@ -49,14 +55,15 @@
     authPolling=true;$('connect-github').disabled=true;
     try {
       const session=await api('/api/session');
-      if(session.connected){$('connect-github').textContent='GitHub connected';publicationStatus('Connected as '+session.login+'. Click Publish to send your post.');return;}
+      connectionStatus(session.connected);
+      if(session.connected){publicationStatus('Connected as '+session.login+'. Click Publish to send your post.');return;}
       await api('/api/auth/start',{});
       publicationStatus('Preparing GitHub sign-in…','Connect GitHub');
       for(let attempt=0;attempt<300;attempt++) {
         await new Promise(resolve=>setTimeout(resolve,3000));
         const state=await api('/api/session');
         if(state.connected) {
-          $('github-login').hidden=true;$('connect-github').textContent='GitHub connected';
+          $('github-login').hidden=true;connectionStatus(true);
           publicationStatus('Connected as '+state.login+'. Yoga will remember this connection.');
           const pending=pendingPublishId;pendingPublishId=null;
           if(pending && active===pending)await publishCurrent();
@@ -66,16 +73,16 @@
         if(state.error)throw new Error(state.error);
       }
       throw new Error('Sign-in timed out. Click Connect GitHub to try again.');
-    }catch(error){publicationStatus(error.message,'Connection needed');}
+    }catch(error){connectionStatus(false);publicationStatus(error.message,'Connection needed');}
     finally{authPolling=false;$('connect-github').disabled=false;}
   }
-  async function watchDeployment(commit,title) {
+  async function watchDeployment(commit,title,removed=false) {
     for(let attempt=0;attempt<36;attempt++) {
       await new Promise(resolve=>setTimeout(resolve,5000));
       try {
         const result=await api('/api/deployment?commit='+encodeURIComponent(commit));
         if(result.status==='completed') {
-          publicationStatus(result.conclusion==='success'?'“'+title+'” is live.':result.conclusion==='cancelled'?'Saved to GitHub. A newer site update replaced this build.':'Saved to GitHub, but the site build failed. Your writing is safe in GitHub.',result.conclusion==='success'?'Published':'Saved to GitHub');
+          publicationStatus(result.conclusion==='success'?'“'+title+'” '+(removed?'has been removed from the public blog.':'is live.'):result.conclusion==='cancelled'?'Saved to GitHub. A newer site update replaced this build.':'Saved to GitHub, but the site build failed. Your writing is safe in GitHub.',result.conclusion==='success'?(removed?'Deleted':'Published'):'Saved to GitHub');
           if(result.conclusion==='success')refreshIndex();
           return;
         }
@@ -91,6 +98,7 @@
       if(!isPrivate){handoff(true);return;}
       publishing=true;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
       const session=await api('/api/session');
+      connectionStatus(session.connected);
       if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
       // Keep the exact request for a safe retry if the response is lost.
       const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator]);
@@ -105,17 +113,50 @@
       const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:d.sourceSha || null});
       const wasPublished=!!d.sourcePath;
       d.sourcePath=prepared.path;d.sourceSha=result.sha;
+      removedPaths.delete(prepared.path);
       if(d.kind==='post')d.originalDate=originalDate;
       else d.permalink=permalink;
       if(!result.unchanged){if(wasPublished)d.editedAt=result.time;else d.publishedAt=result.time;}
-      delete d.pendingPublication;save();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;}
+      delete d.pendingPublication;save();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;updateDeleteButton();}
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
       $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(d.kind==='page'?d.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
       publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
       if(result.commit)watchDeployment(result.commit,d.title);
     }catch(error){if(error.status===409 && publishingDraft){publishingDraft.conflict=true;save();refreshIndex();}publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
-    finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';}
+    finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';updateDeleteButton();}
   }
+  function updateDeleteButton() {
+    $('delete-post').hidden=!isPrivate || !current().sourcePath;
+    $('delete-post').disabled=publishing || !current().sourceSha;
+    $('delete-post').textContent=current().kind==='page'?'Delete page':'Delete post';
+  }
+  let deletionTarget=null;
+  $('delete-post').addEventListener('click',()=>{
+    if(publishing || !current().sourcePath || !current().sourceSha)return;
+    changed();const d=current();deletionTarget={id:d.id,path:d.sourcePath,sha:d.sourceSha,title:d.title};
+    $('delete-heading').textContent=d.kind==='page'?'Delete reference page?':'Delete published post?';
+    $('delete-description').textContent='Remove “'+d.title+'” from the public blog?'+(d.kind==='page'?' Existing references to this page will stop working.':'');
+    $('delete-dialog').showModal();
+  });
+  $('cancel-delete').addEventListener('click',()=>$('delete-dialog').close());
+  $('confirm-delete').addEventListener('click',async()=>{
+    if(publishing || !deletionTarget)return;
+    const target=deletionTarget;deletionTarget=null;$('delete-dialog').close();
+    publishing=true;$('publish').disabled=true;updateDeleteButton();$('view-published').hidden=true;
+    try {
+      publicationStatus('Removing “'+target.title+'” from GitHub…','Deleting');
+      const result=await api('/api/delete',{path:target.path,baseSha:target.sha});
+      removedPaths.add(target.path);published=published.filter(p=>p.path!==target.path);
+      for(const d of drafts)if(d.sourcePath===target.path){d.targetPath=target.path;delete d.sourcePath;delete d.sourceSha;delete d.publishedAt;delete d.editedAt;delete d.pendingPublication;delete d.conflict;}
+      save();renderNav();timestamp(current());
+      publicationStatus(result.alreadyRemoved?'Already removed from GitHub. A copy remains in your drafts.':'Removed from GitHub. A copy remains in your drafts; the public blog is updating…','Deleted from GitHub');
+      if(result.commit)watchDeployment(result.commit,target.title,true);
+    }catch(error){
+      if(error.status===409){const d=drafts.find(d=>d.id===target.id);if(d)d.conflict=true;save();refreshIndex();}
+      if(error.status===401)connectionStatus(false);
+      publicationStatus(error.message,'Deletion not confirmed');
+    }finally{publishing=false;$('publish').disabled=false;updateDeleteButton();}
+  });
   function readDocument(container) {
     const blocks=[]; let runs=[];
     const flush=()=>{if(runs.length){blocks.push({runs});runs=[];}};
@@ -150,13 +191,13 @@
     container.childNodes.forEach(child=>walk(child)); flush(); return blocks;
   }
   function save() {
-    if(saveFailed) { $('save-status').textContent='Autosave unavailable. Use Backup drafts before closing.'; return; }
+    if(saveFailed) { $('save-status').textContent='Autosave unavailable. Use Save JSON before closing.'; return; }
     try {
       const previous=localStorage.getItem(key);
       if(previous) localStorage.setItem(backupKey,previous);
       localStorage.setItem(key,JSON.stringify({version:2,drafts,active}));
       $('save-status').textContent='Saved on this device'+(current().updatedAt?' · '+new Date(current().updatedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
-    } catch { $('save-status').textContent='Could not save. Use Backup drafts before closing.'; }
+    } catch { $('save-status').textContent='Could not save. Use Save JSON before closing.'; }
   }
   function renderNav() {
     const nav=$('writing-nav'); nav.replaceChildren();
@@ -180,9 +221,10 @@
   function empties() {for(const id of ['title','quote','body']) $(id).dataset.empty=String(!$(id).textContent.trim());}
   function load() {
     const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
-    $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d));$('quote').hidden=!d.quote.trim();$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
+    $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d));$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
     $('publish-panel').hidden=true;$('view-published').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
+    updateDeleteButton();
   }
   function changed() {
     const d=current();d.title=$('title').textContent;d.quote=$('quote').textContent;d.doc=readDocument($('body'));d.kind=$('kind').value;d.updatedAt=new Date().toISOString();
@@ -191,8 +233,6 @@
   for(const id of ['title','quote','body']) $(id).addEventListener('input',changed);
   for(const id of ['title','quote']) $(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('body').focus();}});
   $('kind').addEventListener('change',changed);
-  $('add-quote').addEventListener('click',()=>{$('quote').hidden=false;$('quote-block').hidden=false;$('quote-source').hidden=false;$('quote').focus();});
-  $('quote').addEventListener('blur',()=>{if(!$('quote').textContent.trim()){$('quote').hidden=true;$('quote-block').hidden=true;}});
   $('body').addEventListener('paste',e=>{
     e.preventDefault(); const html=e.clipboardData.getData('text/html'); let doc;
     if(html) {const template=document.createElement('template');template.innerHTML=html;doc=readDocument(template.content);}
@@ -236,7 +276,7 @@
     const d=current(), refs=d.references || [], key=core.referenceKey(d);
     $('reference-preview').innerHTML=core.renderReferences(refs,key);
     $('quote-source').hidden=!d.quote.trim();
-    $('quote-block').hidden=!d.quote.trim();
+    $('quote-block').hidden=false;
     $('quote-citation').innerHTML=d.quoteReference?core.citation(d.quoteReference,refs,key,d.quoteLocator || ''):'';
     $('cite-quote').textContent=d.quoteReference?'Edit quote source':'Choose quote source';
     $('reference-preview').querySelectorAll('li').forEach((li,i)=>{
@@ -307,16 +347,16 @@
         if(same && JSON.stringify(same)===JSON.stringify(incoming))continue;
         drafts.push({...incoming,id:same?crypto.randomUUID():incoming.id,doc:incoming.doc || core.plainDocument(incoming.body)});
       }
-      saveFailed=false;renderNav();save();$('index-status').textContent='Backup restored. Existing drafts kept.';
+      saveFailed=false;renderNav();save();$('index-status').textContent='JSON imported. Existing drafts kept.';
     }catch(e){$('index-status').textContent=e.message;}finally{$('restore-file').value='';}
   });
   function refreshIndex(){return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
-    published=[...(data.posts || []),...(data.pages || [])];renderNav();
+    published=[...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path));renderNav();
   }).catch(()=>{$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});}
   load();save();refreshIndex();
   if(isPrivate) {
-    $('connect-github').textContent='Connect GitHub';
-    api('/api/session').then(s=>{if(s.connected)$('connect-github').textContent='GitHub connected';}).catch(()=>{});
+    const checkConnection=()=>api('/api/session').then(s=>connectionStatus(s.connected)).catch(()=>connectionStatus(false));
+    checkConnection();setInterval(checkConnection,60000);
     if(window.opener && new URLSearchParams(location.search).has('import')) {
       const receive=event=>{
         if(event.origin!=='https://sjaakiechen.github.io' || event.source!==window.opener || event.data?.type!=='blog-desk-import')return;

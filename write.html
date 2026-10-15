@@ -21,13 +21,13 @@ permalink: /write/
 <button data-command="bold" type="button" aria-label="Bold" aria-pressed="false"><b>B</b></button>
 <button data-command="italic" type="button" aria-label="Italic" aria-pressed="false"><i>I</i></button>
 <button data-command="underline" type="button" aria-label="Underline" aria-pressed="false"><u>U</u></button>
-<button id="add-quote" type="button">Quote</button>
 <button id="add-reference" type="button">Reference</button>
 <select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Reference page</option></select>
 <button id="publish" class="primary" type="button">Publish</button>
-<button id="connect-github" type="button">Open private desk</button>
-<button id="download" type="button">Backup drafts</button>
-<button id="restore" type="button">Restore backup</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
+<button id="delete-post" type="button" hidden>Delete post</button>
+<button id="connect-github" class="connection-dot" data-connected="false" type="button" aria-label="Open private writing desk" title="Open private writing desk"></button>
+<button id="download" type="button">Save JSON</button>
+<button id="restore" type="button">Import JSON</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
 </div>
 <div class="reading-column">
 <article class="post" aria-label="Editable post preview">
@@ -45,6 +45,12 @@ permalink: /write/
 <a id="view-published" hidden target="_blank" rel="noopener noreferrer">View post ↗</a>
 </section>
 </div></main></div>
+<dialog id="delete-dialog" aria-labelledby="delete-heading">
+<h2 id="delete-heading">Delete published post?</h2>
+<p id="delete-description"></p>
+<p>A copy stays in your drafts. The public blog updates after deployment; the original also remains recoverable from GitHub history.</p>
+<div class="actions"><button id="confirm-delete" type="button">Delete from blog</button><button id="cancel-delete" type="button" autofocus>Cancel</button></div>
+</dialog>
 <dialog id="reference-dialog" aria-labelledby="reference-heading">
 <form id="reference-form" autocomplete="off">
 <h2 id="reference-heading">Add a reference</h2>
