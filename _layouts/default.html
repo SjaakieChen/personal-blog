@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="{{ page.description | default: site.title | escape }}">
+<title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
+<link rel="stylesheet" href="{{ '/assets/fonts.css' | relative_url }}">
+<link rel="stylesheet" href="{{ '/styles.css' | relative_url }}">
+</head><body>
+<a class="skip-link" href="#posts">Skip to posts</a>
+<div class="blog-shell">
+<aside class="sidebar" aria-label="Post navigation"><nav class="timeline" aria-label="Posts by date">
+{% assign previous_date = '' %}{% for post in site.posts %}
+{% assign post_day = post.date | date: '%Y-%m-%d' %}
+{% if post_day != previous_date %}<time class="nav-date" datetime="{{ post_day }}">{{ post.date | date: '%-d %B %Y' }}</time>{% assign previous_date = post_day %}{% endif %}
+<a href="{% if page.home %}#{{ post.slug | escape }}{% else %}{{ post.url | relative_url }}{% endif %}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
+{% endfor %}</nav></aside>
+<main class="main" id="posts" tabindex="-1"><div class="reading-column">{{ content }}</div>
+<footer class="site-footer"><a href="{{ '/' | relative_url }}">All posts</a><a href="{{ '/write/' | relative_url }}">Write</a></footer></main>
+</div></body></html>

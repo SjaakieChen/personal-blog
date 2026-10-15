@@ -1,28 +1,33 @@
-# Personal blog
+# Jiaqi Chen's blog
 
-A minimal design canvas hosted on GitHub Pages.
+Blog: https://sjaakiechen.github.io/personal-blog/
+Writing desk: https://sjaakiechen.github.io/personal-blog/write/
 
-Website: https://sjaakiechen.github.io/personal-blog/
+## Write and publish
 
-## Local preview
+1. Open the writing desk in Microsoft Edge. Choose Blog post or Standalone page. Write a title, an optional opening quote, and paragraphs.
+2. Drafts save in this browser. New draft keeps earlier drafts in the Saved drafts menu. Download backups before clearing browser data or changing computers.
+3. Choose Prepare to publish, then Copy post and Open GitHub editor.
+4. Sign in to GitHub if needed. The filename is prefilled. Paste the prepared content into the file editor, choose Commit changes, and commit directly to main.
+5. GitHub Pages builds the update. Posts appear in the dated sidebar and get permanent URLs. Standalone pages get their own URLs, shown in the prepared content.
 
-From this folder, run:
+Edit published writing opens existing posts/pages in GitHub. Commit there to update them. Preparing a draft does not publish it; the GitHub commit does. GitHub login provides publishing authorization. No passwords or access tokens are stored in the website. Drafts use plain text and paragraph breaks, with a separate opening quote field.
 
-```sh
-python -m http.server 4173 --bind 127.0.0.1
-```
+Draft storage is local to the browser profile and site origin, not a cloud backup. The writing desk is publicly accessible; only repository writers can commit. The generated example posts are marked sample: true and can be edited or removed through GitHub.
 
-Open http://127.0.0.1:4173. Stop the server with Ctrl+C.
+## Structure
 
-## Design
+- _posts/: dated post files; six generated examples demonstrate the template.
+- pages/: standalone pages created through the writing desk.
+- _layouts/: blog shell, individual posts, and standalone pages.
+- index.html: all posts, newest first.
+- write.html and assets/writer*: writing desk and draft handling.
+- styles.css: selected typography, white page, blue headings, and independently scrolling timeline sidebar.
+- assets/fonts/: self-hosted EB Garamond with its OFL license.
+- local-playground/: ignored local design experiment; not deployed.
 
-The page currently shows four typography combinations in paired sidebar and main-content samples. The first combines EB Garamond titles and italic subtitles with Lora body text. All samples retain the selected EB Garamond titles and italic subtitles. The alternatives change only the body family to Literata, Newsreader, or Libre Baskerville; option one retains Lora. Libre Baskerville uses its supplied 700 weight for bold text; the other body families use 600. Every option uses the same sample copy for comparison. On narrow screens, each sidebar sample stacks above its matching main sample. The Google Fonts stylesheet loads the specified upright, italic, and bold weights.
+## Publishing and checks
 
-- `index.html` contains the layout.
-- `styles.css` defines the two colours, font roles, spacing, responsive sidebar width, and mobile stacking.
-- `404.html` uses the same empty layout and a descriptive browser title. Its stylesheet includes the `/personal-blog/` prefix for nested missing URLs. The local Python server does not emulate Pages' custom 404 routing.
-- `.nojekyll` tells GitHub Pages to serve these files directly.
+Pages uses Jekyll from the root of main. Pushes to main rebuild it; .nojekyll must stay absent. _config.yml contains the project base URL. Future dates display immediately rather than being scheduled (future: true).
 
-## Publishing
-
-GitHub Pages serves the root of `main`. Commit and push to publish changes automatically. No dependencies or build step are needed.
+Run `node --test scripts/writer.test.cjs` for publishing-format and text-escaping checks. GitHub's Pages build validates Jekyll templates. A local Jekyll preview needs the /personal-blog/ base path. The existing port 4173 playground remains a separate local-only design tool.

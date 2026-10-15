@@ -1,0 +1,9 @@
+---
+layout: default
+---
+<article class="post" id="{{ page.slug | escape }}">
+<h1>{{ page.title | escape }}</h1>
+<time class="post-date" datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: '%-d %B %Y' }}</time>
+{% if page.quote %}<blockquote class="quote">“{{ page.quote | escape }}”</blockquote>{% endif %}
+<div class="post-body">{{ content }}</div>
+</article>

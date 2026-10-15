@@ -1,0 +1,27 @@
+.writer { font-weight: 400; }
+.writer-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 32px; border-bottom: 1px solid #dce1e4; font: 14px/1.5 system-ui,sans-serif; }
+.writer-header span { color: #65717a; }
+.desk { display: grid; grid-template-columns: minmax(320px,1fr) minmax(320px,1fr); max-width: 1500px; margin: auto; }
+.compose { padding: 38px 36px; border-right: 1px solid #dce1e4; }
+.compose h1 { font-size: 34px; }
+.compose h2 { font-size: 26px; }
+.hint, .optional, .preview-label { color: #5e6b74; font: 13px/1.6 system-ui,sans-serif; }
+.hint { margin: 12px 0 20px; }
+.compose label { display: block; margin: 20px 0 0; font: 14px/1.5 system-ui,sans-serif; color: #364550; }
+.compose input,.compose textarea,.compose select { display: block; width: 100%; margin-top: 7px; padding: 10px 12px; border: 1px solid #aab7bf; border-radius: 0; background: #fff; color: #293338; font: 16px/1.5 system-ui,sans-serif; }
+.compose textarea { resize: vertical; }
+.compose #body { font: 400 20px/1.7 "EB Garamond",Georgia,serif; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+button,.button { display: inline-block; border: 1px solid #8299a9; border-radius: 0; padding: 10px 14px; background: white; color: #245c85; cursor: pointer; text-decoration: none; font: 14px/1.5 system-ui,sans-serif; }
+.primary { color: white; background: #24699f; border-color: #24699f; }
+button:hover,.button:hover { filter: brightness(.94); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.writer-preview { padding: 42px 40px; position: sticky; top: 0; max-height: 100vh; overflow: auto; }
+.preview-label { margin-bottom: 28px; text-transform: uppercase; letter-spacing: 1px; }
+.writer-preview .post-body p { white-space: pre-wrap; }
+.publish-panel { margin-top: 32px; padding-top: 24px; border-top: 1px solid #dce1e4; }
+.publish-panel ol { padding-left: 22px; font: 14px/1.7 system-ui,sans-serif; }
+#prepared { font: 12px/1.5 monospace; }
+.manage { margin-top: 32px; font: 14px/1.8 system-ui,sans-serif; }
+.manage summary { cursor: pointer; }
+@media(max-width:850px) { .desk { grid-template-columns: 1fr; } .compose { border-right: none; padding: 28px 24px; } .writer-preview { position: static; max-height: none; padding: 28px 24px; border-top: 1px solid #dce1e4; } .writer-header { padding: 16px 24px; } .writer-header span { display: none; } }

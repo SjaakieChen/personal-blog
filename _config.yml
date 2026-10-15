@@ -1,0 +1,18 @@
+title: Jiaqi Chen
+url: https://sjaakiechen.github.io
+baseurl: /personal-blog
+timezone: Europe/London
+markdown: kramdown
+future: true
+permalink: /posts/:title/
+exclude:
+  - README.md
+  - local-playground
+  - scripts
+defaults:
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: post
+      render_with_liquid: false

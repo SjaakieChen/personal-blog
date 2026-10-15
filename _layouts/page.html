@@ -1,0 +1,6 @@
+---
+layout: default
+---
+<article class="post"><h1>{{ page.title | escape }}</h1>
+{% if page.quote %}<blockquote class="quote">“{{ page.quote | escape }}”</blockquote>{% endif %}
+<div class="post-body">{{ content }}</div></article>
