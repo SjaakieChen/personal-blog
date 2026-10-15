@@ -24,7 +24,7 @@
   async function api(path,body) {
     const response=await fetch(path,{cache:'no-store',...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
     const data=await response.json();
-    if(!response.ok)throw new Error(data.error || 'The server could not complete the request.');
+    if(!response.ok){const error=new Error(data.error || 'The server could not complete the request.');error.status=response.status;throw error;}
     return data;
   }
   function publicationStatus(text,heading='Publish') {
@@ -85,8 +85,9 @@
   }
   async function publishCurrent() {
     if(publishing)return;
+    let publishingDraft;
     try {
-      changed();const d=current();core.prepare(d);
+      changed();const d=current();publishingDraft=d;core.prepare(d);
       if(!isPrivate){handoff(true);return;}
       publishing=true;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
       const session=await api('/api/session');
@@ -112,7 +113,7 @@
       $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(d.kind==='page'?d.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
       publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
       if(result.commit)watchDeployment(result.commit,d.title);
-    }catch(error){publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
+    }catch(error){if(error.status===409 && publishingDraft){publishingDraft.conflict=true;save();refreshIndex();}publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
     finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';}
   }
   function readDocument(container) {
@@ -219,7 +220,7 @@
   });
   $('new-draft').addEventListener('click',()=>{const d=newDraft();drafts.unshift(d);active=d.id;load();save();$('title').focus();});
   function openPublished(entry) {
-    const existing=drafts.find(d=>d.sourcePath===entry.path);
+    const existing=drafts.find(d=>d.sourcePath===entry.path && !d.conflict && d.sourceSha);
     if(existing) active=existing.id;
     else {
       const template=document.createElement('template');template.innerHTML=entry.html;
