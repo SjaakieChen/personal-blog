@@ -1,4 +1,5 @@
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 :root { --blue: #24699f; --ink: #293338; --side: #293b46; --paper: #ffffff; --side-ink: #f5f1e8; }
 body { margin: 0; background: var(--paper); color: var(--ink); font: 550 20px/1.8 "EB Garamond", Georgia, serif; }
 a { color: var(--blue); text-underline-offset: 4px; }
