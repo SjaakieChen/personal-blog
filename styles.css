@@ -2,20 +2,148 @@
   color-scheme: light;
   --paper: #f5f1e8;
   --sidebar: #344752;
+  --ink: #303b40;
+  --muted: #6c6b63;
+  --side-muted: #c5ced0;
+  --sidebar-width: clamp(220px, 24vw, 280px);
   background: var(--paper);
+  color: var(--ink);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 * { box-sizing: border-box; }
-
 body { margin: 0; }
 
+.study-header,
+.font-row {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.study-header {
+  font: 12px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.sidebar-heading {
+  padding: 24px 28px;
+  background: var(--sidebar);
+  color: var(--side-muted);
+  border-bottom: 1px solid #53636b;
+}
+
+.main-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 24px;
+  padding: 24px clamp(28px, 5vw, 80px);
+  border-bottom: 1px solid #d7d2c7;
+}
+
+.main-heading h1 { margin: 0; font: inherit; font-weight: 500; }
+.main-heading span { color: var(--muted); }
+
+.font-row {
+  --title-font: "EB Garamond", Georgia, serif;
+  --text-font: "Lora", Georgia, serif;
+}
+
+.bookish { --text-font: "Source Serif 4", Georgia, serif; }
+.caslon { --title-font: "Libre Caslon Text", Georgia, serif; }
+.crimson { --title-font: "Crimson Pro", Georgia, serif; }
+
+.sidebar-sample {
+  min-width: 0;
+  padding: 40px 28px 44px;
+  background: var(--sidebar);
+  color: var(--paper);
+  border-bottom: 1px solid #53636b;
+}
+
+.main-sample {
+  min-width: 0;
+  padding: 40px clamp(28px, 5vw, 80px) 52px;
+  border-bottom: 1px solid #d7d2c7;
+}
+
+.sample-content { max-width: 680px; }
+
+.sample-label {
+  margin: 0 0 28px;
+  font: 500 11px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidebar-sample .sample-label { color: var(--side-muted); }
+
+.sample-title {
+  margin: 0;
+  font-family: var(--title-font);
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 1.2;
+  letter-spacing: -0.6px;
+  overflow-wrap: break-word;
+}
+
+.caslon .sample-title { font-weight: 400; }
+
+.sample-subtitle {
+  margin: 16px 0 0;
+  font-family: var(--title-font);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.sample-text {
+  margin: 30px 0 0;
+  font-family: var(--text-font);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.9;
+}
+
+.sample-text strong { font-weight: 600; }
+
+.sidebar-sample .sample-title { font-size: 29px; letter-spacing: -0.35px; }
+.sidebar-sample .sample-subtitle { font-size: 16px; color: #dce0d9; }
+.sidebar-sample .sample-text { font-size: 14px; line-height: 1.85; }
+
+.font-details {
+  margin: 32px 0 0;
+  font: 11px/1.8 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--muted);
+}
+
+.font-details span { display: inline-block; margin-left: 20px; }
+.sidebar-sample .font-details { color: var(--side-muted); }
+
+/* The missing-page shell keeps its original blank two-colour layout. */
 .layout {
   display: grid;
   grid-template-columns: clamp(72px, 20vw, 240px) minmax(0, 1fr);
   min-height: 100vh;
   min-height: 100svh;
 }
-
 .sidebar { background: var(--sidebar); }
 
-main { background: var(--paper); }
+@media (max-width: 700px) {
+  .study-header { display: block; }
+  .sidebar-heading { display: none; }
+  .main-heading { padding: 20px 24px; }
+  .font-row { grid-template-columns: minmax(0, 1fr); }
+  .sidebar-sample { padding: 32px 24px; }
+  .sidebar-sample .sample-title { max-width: 300px; }
+  .sidebar-sample .sample-text { max-width: 300px; }
+  .main-sample { padding: 36px 24px 44px; }
+  .sample-title { font-size: 34px; }
+  .sample-subtitle { font-size: 19px; }
+  .sample-text { font-size: 16px; }
+  .font-details span { display: block; margin: 0; }
+}

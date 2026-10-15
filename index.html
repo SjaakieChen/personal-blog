@@ -3,15 +3,92 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="A personal blog.">
+    <meta name="description" content="A typography study for a personal blog.">
     <meta name="theme-color" content="#344752">
-    <title>Blog</title>
-    <link rel="stylesheet" href="./styles.css">
+    <title>Font study</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,500;1,400&amp;family=EB+Garamond:ital,wght@0,500;1,400&amp;family=Libre+Caslon+Text:ital,wght@0,400;1,400&amp;family=Lora:ital,wght@0,400;0,600;1,400&amp;family=Source+Serif+4:ital,wght@0,400;0,600;1,400&amp;display=swap">
+    <link rel="stylesheet" href="./styles.css?v=font-study-1">
   </head>
   <body>
-    <div class="layout">
-      <aside class="sidebar" aria-hidden="true"></aside>
-      <main aria-label="Blog"></main>
-    </div>
+    <header class="study-header">
+      <div class="sidebar-heading">Sidebar samples</div>
+      <div class="main-heading"><h1>Typography study</h1> <span>Your mix + three close alternatives</span></div>
+    </header>
+    <main class="font-study" aria-label="Font combinations for the sidebar and main content">
+      <section class="font-row mix" aria-labelledby="mix-label">
+        <aside class="sidebar-sample" aria-label="Your mix in the sidebar">
+          <p class="sample-label">01 / Your mix</p>
+          <h2 class="sample-title">Notes from here.</h2>
+          <p class="sample-subtitle">A few words in the margin.</p>
+          <p class="sample-text">Some thoughts need <em>a little room</em>; others fit in the margin. A place for <strong>small discoveries</strong> and things worth remembering.</p>
+          <p class="font-details">Title &amp; subtitle · EB Garamond<br>Text · Lora</p>
+        </aside>
+        <article class="main-sample">
+          <div class="sample-content">
+            <h2 class="sample-label" id="mix-label">01 / Your mix</h2>
+            <h3 class="sample-title">A few things worth keeping.</h3>
+            <p class="sample-subtitle">Notes on ordinary days and the details in between.</p>
+            <p class="sample-text">Morning light moves slowly across the page. A sentence begins, changes shape, and finds its rhythm. Some thoughts need <em>a little room</em>; others fit in the margin. This is a place to notice the <strong>small details</strong> and leave a few words behind.</p>
+            <p class="font-details">Title &amp; subtitle · EB Garamond <span>Text · Lora</span></p>
+          </div>
+        </article>
+      </section>
+      <section class="font-row bookish" aria-labelledby="bookish-label">
+        <aside class="sidebar-sample" aria-label="Bookish in the sidebar">
+          <p class="sample-label">02 / Bookish</p>
+          <h2 class="sample-title">Notes from here.</h2>
+          <p class="sample-subtitle">A few words in the margin.</p>
+          <p class="sample-text">Some thoughts need <em>a little room</em>; others fit in the margin. A place for <strong>small discoveries</strong> and things worth remembering.</p>
+          <p class="font-details">Title &amp; subtitle · EB Garamond<br>Text · Source Serif 4</p>
+        </aside>
+        <article class="main-sample">
+          <div class="sample-content">
+            <h2 class="sample-label" id="bookish-label">02 / Bookish</h2>
+            <h3 class="sample-title">A few things worth keeping.</h3>
+            <p class="sample-subtitle">Notes on ordinary days and the details in between.</p>
+            <p class="sample-text">Morning light moves slowly across the page. A sentence begins, changes shape, and finds its rhythm. Some thoughts need <em>a little room</em>; others fit in the margin. This is a place to notice the <strong>small details</strong> and leave a few words behind.</p>
+            <p class="font-details">Title &amp; subtitle · EB Garamond <span>Text · Source Serif 4</span></p>
+          </div>
+        </article>
+      </section>
+      <section class="font-row caslon" aria-labelledby="caslon-label">
+        <aside class="sidebar-sample" aria-label="Caslon in the sidebar">
+          <p class="sample-label">03 / Caslon</p>
+          <h2 class="sample-title">Notes from here.</h2>
+          <p class="sample-subtitle">A few words in the margin.</p>
+          <p class="sample-text">Some thoughts need <em>a little room</em>; others fit in the margin. A place for <strong>small discoveries</strong> and things worth remembering.</p>
+          <p class="font-details">Title &amp; subtitle · Libre Caslon Text<br>Text · Lora</p>
+        </aside>
+        <article class="main-sample">
+          <div class="sample-content">
+            <h2 class="sample-label" id="caslon-label">03 / Caslon</h2>
+            <h3 class="sample-title">A few things worth keeping.</h3>
+            <p class="sample-subtitle">Notes on ordinary days and the details in between.</p>
+            <p class="sample-text">Morning light moves slowly across the page. A sentence begins, changes shape, and finds its rhythm. Some thoughts need <em>a little room</em>; others fit in the margin. This is a place to notice the <strong>small details</strong> and leave a few words behind.</p>
+            <p class="font-details">Title &amp; subtitle · Libre Caslon Text <span>Text · Lora</span></p>
+          </div>
+        </article>
+      </section>
+      <section class="font-row crimson" aria-labelledby="crimson-label">
+        <aside class="sidebar-sample" aria-label="Crimson in the sidebar">
+          <p class="sample-label">04 / Crimson</p>
+          <h2 class="sample-title">Notes from here.</h2>
+          <p class="sample-subtitle">A few words in the margin.</p>
+          <p class="sample-text">Some thoughts need <em>a little room</em>; others fit in the margin. A place for <strong>small discoveries</strong> and things worth remembering.</p>
+          <p class="font-details">Title &amp; subtitle · Crimson Pro<br>Text · Lora</p>
+        </aside>
+        <article class="main-sample">
+          <div class="sample-content">
+            <h2 class="sample-label" id="crimson-label">04 / Crimson</h2>
+            <h3 class="sample-title">A few things worth keeping.</h3>
+            <p class="sample-subtitle">Notes on ordinary days and the details in between.</p>
+            <p class="sample-text">Morning light moves slowly across the page. A sentence begins, changes shape, and finds its rhythm. Some thoughts need <em>a little room</em>; others fit in the margin. This is a place to notice the <strong>small details</strong> and leave a few words behind.</p>
+            <p class="font-details">Title &amp; subtitle · Crimson Pro <span>Text · Lora</span></p>
+          </div>
+        </article>
+      </section>
+    </main>
   </body>
 </html>
