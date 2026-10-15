@@ -46,17 +46,17 @@ permalink: /write/
 </section>
 </div></main></div>
 <dialog id="reference-dialog" aria-labelledby="reference-heading">
-<form id="reference-form">
+<form id="reference-form" autocomplete="off">
 <h2 id="reference-heading">Add a reference</h2>
 <label>Use a source<select id="reference-existing"><option value="">New source</option></select></label>
 <label>Your reference pages<select id="reference-page"><option value="">Choose a page (optional)</option></select></label>
-<label>Title<input id="reference-title" required></label>
-<label>Source URL or PDF link<input id="reference-url" required placeholder="https://…"></label>
-<label>Author / organisation<input id="reference-author"></label>
-<label>Publication details<input id="reference-details" placeholder="Year, journal, DOI…"></label>
-<label>Saved copy link (optional)<input id="reference-saved" placeholder="Your reference page, saved PDF, or archive URL"></label>
-<label>Note (optional)<textarea id="reference-note" rows="2"></textarea></label>
-<label>Page / section for this citation<input id="reference-locator" placeholder="p. 12, §3…"></label>
+<label>Title<input id="reference-title" autocomplete="off" required></label>
+<label>Source URL or PDF link<input id="reference-url" autocomplete="off" required placeholder="https://…"></label>
+<label>Author / organisation<input id="reference-author" autocomplete="off"></label>
+<label>Publication details<input id="reference-details" autocomplete="off" placeholder="Year, journal, DOI…"></label>
+<label>Saved copy link (optional)<input id="reference-saved" autocomplete="off" placeholder="Your reference page, saved PDF, or archive URL"></label>
+<label>Note (optional)<textarea id="reference-note" autocomplete="off" rows="2"></textarea></label>
+<label>Page / section for this citation<input id="reference-locator" autocomplete="off" placeholder="p. 12, §3…"></label>
 <label class="check-label"><input id="reference-quoted" type="checkbox"> Quote the selected text</label>
 <p id="reference-error" role="status"></p>
 <div class="actions"><button class="primary" type="submit">Insert reference</button><button id="reference-cancel" type="button">Cancel</button><button id="new-reference-page" type="button">New reference page</button></div>
