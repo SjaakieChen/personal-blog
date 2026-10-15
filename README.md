@@ -16,7 +16,7 @@ Open http://127.0.0.1:4173. Stop the server with Ctrl+C.
 
 ## Design
 
-The page currently shows four typography combinations in paired sidebar and main-content samples. The first combines EB Garamond titles and italic subtitles with Lora body text. The alternatives use Source Serif 4 body text, Libre Caslon Text headings, or Crimson Pro headings. Every option uses the same sample copy for comparison. On narrow screens, each sidebar sample stacks above its matching main sample. The Google Fonts stylesheet loads the specified upright, italic, and bold weights.
+The page currently shows four typography combinations in paired sidebar and main-content samples. The first combines EB Garamond titles and italic subtitles with Lora body text. All samples retain the selected EB Garamond titles and italic subtitles. The alternatives change only the body family to Literata, Newsreader, or Libre Baskerville; option one retains Lora. Libre Baskerville uses its supplied 700 weight for bold text; the other body families use 600. Every option uses the same sample copy for comparison. On narrow screens, each sidebar sample stacks above its matching main sample. The Google Fonts stylesheet loads the specified upright, italic, and bold weights.
 
 - `index.html` contains the layout.
 - `styles.css` defines the two colours, font roles, spacing, responsive sidebar width, and mobile stacking.
