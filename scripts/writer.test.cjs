@@ -7,6 +7,22 @@ const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
 const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
 const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
 
+test('references include only live body and opening-quote citations, with compact numbering',()=>{
+  const refs=['unused','quote','body','named'].map(id=>({id,title:id,url:'https://example.org/'+id}));
+  const doc=[{runs:[{text:'First',reference:'body'},{text:' Again',reference:'body'},{text:'',reference:'named',label:'demo',labelStyle:'small'}]}];
+  const d={...draft,doc,references:refs,quote:'An opening quote',quoteReference:'quote'};
+  assert.deepEqual(require('../assets/writer-core').usedReferences(d).map(r=>r.id),['quote','body','named']);
+  const output=prepare(d).content;
+  assert.ok(!output.includes('https://example.org/unused'));assert.match(output,/>\[2\]<\/a>/);
+  assert.match(output,/data-label-style="small"/);
+  const withoutQuote=prepare({...d,quote:''}).content;
+  assert.ok(!withoutQuote.includes('https://example.org/quote'));assert.match(withoutQuote,/quote_reference: ""/);
+  assert.match(withoutQuote,/>\[1\]<\/a>/);
+  const withoutAny=prepare({...d,quote:'',doc:[{runs:[{text:'No citations.'}]}]}).content;
+  assert.match(withoutAny,/references: \[\]/);assert.ok(!withoutAny.includes('aria-label="References"'));
+  assert.equal(d.references.length,4,'local metadata remains available for Undo');
+});
+
 test('named citations display the requested words and keep source links and metadata',()=>{
   const data={type:'blog-citation',version:1,source:references[0],displayText:'our collective reaction'};
   const parsed=parseCitation(data);

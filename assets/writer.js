@@ -379,15 +379,19 @@
   }
   function renderReferencePreview() {
     renderNotePreview();
-    const d=current(), refs=d.references || [], key=core.referenceKey(d);
-    $('body').querySelectorAll('.text-citation[data-reference]').forEach(marker=>{
-      const source=refs.find(r=>r.id===marker.dataset.reference), link=marker.querySelector('a');
-      if(source && link){link.href=core.safeURL(source.url);link.title=source.title+(marker.dataset.locator?' — '+marker.dataset.locator:'');}
+    // Keep source metadata in the local draft so Undo can restore a deleted citation.
+    // Only sources still cited belong in the visible or published reference list.
+    const d=current(), refs=core.usedReferences(d), key=core.referenceKey(d);
+    $('body').querySelectorAll('[data-reference]').forEach(marker=>{
+      const index=refs.findIndex(r=>r.id===marker.dataset.reference), source=refs[index], link=marker.querySelector('a');
+      if(!source || !link)return;
+      if(marker.dataset.label){link.href=core.safeURL(source.url);link.title=source.title+(marker.dataset.locator?' — '+marker.dataset.locator:'');}
+      else {link.textContent='['+(index+1)+']';link.href='#'+key+'-'+(index+1);link.setAttribute('aria-label','Reference '+(index+1)+(marker.dataset.locator?', '+marker.dataset.locator:''));}
     });
     $('reference-preview').innerHTML=core.renderReferences(refs,key);
     $('quote-source').hidden=!d.quote.trim();
     $('quote-block').hidden=false;
-    $('quote-citation').innerHTML=d.quoteReference?core.citation(d.quoteReference,refs,key,d.quoteLocator || ''):'';
+    $('quote-citation').innerHTML=d.quote.trim() && d.quoteReference?core.citation(d.quoteReference,refs,key,d.quoteLocator || ''):'';
     $('cite-quote').textContent=d.quoteReference?'Edit quote source':'Choose quote source';
     $('reference-preview').querySelectorAll('li').forEach((li,i)=>{
       const button=document.createElement('button');button.type='button';button.className='edit-reference';button.textContent='Edit source';
@@ -401,7 +405,7 @@
     referenceView=captureWriterView();
     referenceTarget=target;referenceRange=selectionRange?.cloneRange();
     importedCitation=false;$('imported-citation').hidden=true;
-    const d=current(), refs=d.references || [];
+    const d=current(), refs=core.usedReferences(d);
     $('reference-form').reset();$('reference-error').textContent='';
     $('reference-display-field').hidden=target!=='body';
     $('reference-existing').replaceChildren(new Option('New source',''),...refs.map(r=>new Option(r.title,r.id)));
@@ -423,6 +427,7 @@
     openReference(target);
     referenceView=originalView;
     const existing=(current().references || []).find(r=>r.url===citation.source.url);
+    if(existing && !Array.from($('reference-existing').options).some(option=>option.value===existing.id))$('reference-existing').add(new Option(existing.title,existing.id));
     $('reference-existing').value=existing?.id || '';
     fillReference(citation.source);$('reference-locator').value=citation.locator;
     importedCitation=true;$('imported-citation').hidden=false;

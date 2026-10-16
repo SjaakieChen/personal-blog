@@ -41,6 +41,12 @@
       return '<li id="'+escapeHTML(key)+'-'+(i+1)+'">'+(link(r.url,r.title)||escapeHTML(r.title || 'Untitled source'))+(r.author?' — '+escapeHTML(r.author):'')+(r.details?'. '+escapeHTML(r.details):'')+(r.savedUrl?' <span class="reference-copy">'+link(r.savedUrl,'Saved copy')+'</span>':'')+(r.note?'<p>'+escapeHTML(r.note)+'</p>':'')+'</li>';
     }).join('')+'</ol></section>';
   }
+  function usedReferences(draft) {
+    const doc=draft.doc || plainDocument(draft.body || '');
+    const ids=new Set(doc.flatMap(block=>block.runs.map(run=>run.reference).filter(Boolean)));
+    if(draft.quote?.trim() && draft.quoteReference)ids.add(draft.quoteReference);
+    return (draft.references || []).filter(reference=>ids.has(reference.id));
+  }
   function validNotes(notes) {
     return Array.isArray(notes) && notes.every(n=>n && typeof n.id==='string' && n.id && typeof n.text==='string' && n.text.trim()) && new Set(notes.map(n=>n.id)).size===notes.length;
   }
@@ -76,10 +82,11 @@
     const doc=draft.doc || plainDocument(draft.body || '');
     if(!draft.title.trim() || !validDocument(doc) || !doc.some(b=>b.runs.some(r=>r.text.trim() || r.label?.trim()))) throw new Error('Add a title and some writing first.');
     if(!['post','page'].includes(draft.kind)) throw new Error('Choose a post or a page.');
-    const references=draft.references || [];
+    const availableReferences=draft.references || [];
     const notes=draft.notes || [];
     if(!validNotes(notes))throw new Error('Each explanation needs text and a unique ID.');
-    if(!Array.isArray(references) || references.some(r=>!r || typeof r.id!=='string' || !r.title?.trim() || !safeURL(r.url) || (r.savedUrl && !safeURL(r.savedUrl))) || new Set(references.map(r=>r.id)).size!==references.length) throw new Error('Each reference needs a title and a valid source link.');
+    if(!Array.isArray(availableReferences) || availableReferences.some(r=>!r || typeof r.id!=='string' || !r.title?.trim() || !safeURL(r.url) || (r.savedUrl && !safeURL(r.savedUrl))) || new Set(availableReferences.map(r=>r.id)).size!==availableReferences.length) throw new Error('Each reference needs a title and a valid source link.');
+    const references=usedReferences(draft);
     const hasReference=id=>references.some(r=>r.id===id);
     if(draft.quote?.trim() && !hasReference(draft.quoteReference)) throw new Error('Choose a reference for the opening quote before publishing.');
     for(const block of doc)for(const run of block.runs) {
@@ -95,7 +102,7 @@
     if(!/^(?:_posts|pages)\/[a-zA-Z0-9_-]+\.md$/.test(filename)) throw new Error('Unsupported publishing filename.');
     const metadata=['---',`layout: ${draft.kind}`,`title: ${JSON.stringify(draft.title.trim())}`,`quote: ${JSON.stringify((draft.quote || '').trim())}`,'render_with_liquid: false'];
     const key=referenceKey(draft);
-    metadata.push('reference_key: '+JSON.stringify(key.replace(/^ref-/,'')), 'references: '+JSON.stringify(references), 'quote_reference: '+JSON.stringify(draft.quoteReference || ''), 'quote_locator: '+JSON.stringify(draft.quoteLocator || ''));
+    metadata.push('reference_key: '+JSON.stringify(key.replace(/^ref-/,'')), 'references: '+JSON.stringify(references), 'quote_reference: '+JSON.stringify(draft.quote?.trim()?draft.quoteReference || '':''), 'quote_locator: '+JSON.stringify(draft.quote?.trim()?draft.quoteLocator || '':''));
     metadata.push('notes: '+JSON.stringify(usedNotes(doc,notes)));
     if(draft.kind==='post') metadata.push(`date: ${JSON.stringify(draft.originalDate || now.toISOString())}`);
     else metadata.push(`permalink: ${JSON.stringify(draft.permalink || '/'+name+'/')}`);
@@ -104,7 +111,7 @@
     const url=draft.sourcePath ? 'https://github.com/SjaakieChen/personal-blog/edit/main/'+filename : 'https://github.com/SjaakieChen/personal-blog/new/main?filename='+encodeURIComponent(filename);
     return {filename,content,url};
   }
-  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes};
+  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,usedReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes};
   root.BlogWriter=api;
   if(typeof module!=='undefined' && module.exports) module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
