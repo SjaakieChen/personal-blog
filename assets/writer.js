@@ -118,6 +118,7 @@
       }
       save();publicationStatus('Sending “'+d.title+'” to GitHub…');
       const prepared=d.pendingPublication;
+      const publishedWriting=writingFingerprint(d);
       const originalDate=d.kind==='post'?JSON.parse(prepared.content.match(/^date: (.+)$/m)[1]):null;
       const permalink=d.kind==='page'?JSON.parse(prepared.content.match(/^permalink: (.+)$/m)[1]):null;
       const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:d.sourceSha || null});
@@ -127,7 +128,7 @@
       if(d.kind==='post')d.originalDate=originalDate;
       else d.permalink=permalink;
       if(!result.unchanged){if(wasPublished)d.editedAt=result.time;else d.publishedAt=result.time;}
-      d.publishedFingerprint=writingFingerprint(d);
+      d.publishedFingerprint=publishedWriting;
       delete d.pendingPublication;save();refreshIndex();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;updateDeleteButton();}
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
       $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(d.kind==='page'?d.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
