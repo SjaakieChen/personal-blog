@@ -26,7 +26,7 @@
   function citation(id, references=[], key='preview', locator='') {
     const i=references.findIndex(r=>r.id===id);
     if(i<0) return '<sup class="citation missing-reference">[?]</sup>';
-    return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'">['+(i+1)+(locator?', '+escapeHTML(locator):'')+']</a></sup>';
+    return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'" title="'+escapeHTML(locator)+'">['+(i+1)+']</a></sup>';
   }
   function renderReferences(references=[], key='preview') {
     if(!references.length)return '';

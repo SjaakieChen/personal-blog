@@ -7,6 +7,16 @@ const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
 const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
 const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
 
+test('citation markers show only the number while preserving section details and targets',()=>{
+  const {citation}=require('../assets/writer-core.js');
+  const html=citation('source-1',references,'ref-test','Section: A long heading');
+  assert.match(html,/>\[1\]<\/a>/);
+  assert.ok(!html.includes('[1,'));
+  assert.match(html,/data-locator="Section: A long heading"/);
+  assert.match(html,/title="Section: A long heading"/);
+  assert.match(html,/href="#ref-test-1"/);
+});
+
 test('explanation notes follow text order, remain separate from sources, and escape text',()=>{
   const notes=[{id:'later',text:'Second explanation'},{id:'first',text:'Extra <script>detail</script>\nNext line'},{id:'unused',text:'Not attached'}];
   const doc=[{runs:[{text:'First sentence.',note:'first'},{text:'Second sentence.',note:'later',reference:'source-1'}]}];
