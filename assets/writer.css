@@ -3,7 +3,8 @@
 button,.button,select { border: 1px solid #a4b3be; border-radius: 0; padding: 7px 11px; background: #fff; color: #245c85; cursor: pointer; text-decoration: none; font: 13px/1.5 system-ui,sans-serif; }
 .desk-links button { background: transparent; color: var(--side-ink); border-color: #70828d; }
 .primary { background: #24699f; color: white; border-color: #24699f; }
-.editor-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: -42px 0 36px; max-width: 850px; }
+.writer .main { padding-top: 0; }
+.editor-tools { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0 0 36px; padding: 24px 0 12px; background: #fff; border-bottom: 1px solid #dce1e4; }
 .editor-tools [data-command] { min-width: 34px; }
 .editor-tools [aria-pressed="true"] { background: #dae8f3; border-color: #24699f; }
 .timeline button { border: 0; padding: 4px 0; background: transparent; color: var(--side-ink); font: inherit; text-align: left; text-decoration: underline; text-decoration-color: #a3a8a7; text-underline-offset: 4px; width: fit-content; overflow-wrap: anywhere; }
@@ -33,4 +34,4 @@ dialog input:not([type=checkbox]),dialog select,dialog textarea { display: block
 .editor-tools .connection-dot { width: 12px; height: 12px; min-width: 12px; padding: 0; margin: 0 8px; border: 1px solid #9b493d; border-radius: 50%; background: #b65345; }
 .editor-tools .connection-dot[data-connected="true"] { background: #42815b; border-color: #356b4a; }
 .editable-quote { display: inline-block; min-width: 150px; min-height: 1.5em; }
-@media(max-width:700px) { .desk-links { margin-top: 0; } .editor-tools { margin-top: -12px; margin-bottom: 28px; } }
+@media(max-width:700px) { .desk-links { margin-top: 0; } .editor-tools { padding-top: 12px; margin-bottom: 28px; } }

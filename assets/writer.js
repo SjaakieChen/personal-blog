@@ -261,6 +261,24 @@
     const d=current();d.title=$('title').textContent;d.quote=$('quote').textContent;d.doc=readDocument($('body'));d.kind=$('kind').value;d.updatedAt=new Date().toISOString();
     $('publish-panel').hidden=true;empties();renderNav();renderReferencePreview();save();
   }
+  function resetTypingFormat() {
+    // At the new caret position, change typing state without touching the previous line.
+    for(const command of ['underline','italic','bold']) {
+      if(document.queryCommandState(command)) document.execCommand(command,false,null);
+      document.querySelector('[data-command="'+command+'"]').setAttribute('aria-pressed','false');
+    }
+  }
+  $('body').addEventListener('beforeinput',event=>{
+    if(!['insertParagraph','insertLineBreak'].includes(event.inputType) || !event.cancelable) return;
+    event.preventDefault();
+    document.execCommand(event.inputType,false,null);
+    resetTypingFormat();
+    changed();
+  });
+  const toolbar=document.querySelector('.editor-tools');
+  new ResizeObserver(()=>{
+    $('writing-main').style.scrollPaddingTop=(toolbar.offsetHeight+16)+'px';
+  }).observe(toolbar);
   for(const id of ['title','quote','body']) $(id).addEventListener('input',changed);
   for(const id of ['title','quote']) $(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('body').focus();}});
   $('kind').addEventListener('change',changed);
