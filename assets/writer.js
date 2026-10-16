@@ -126,22 +126,52 @@
     finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';updateDeleteButton();}
   }
   function updateDeleteButton() {
+    $('delete-draft').disabled=publishing;
     $('delete-post').hidden=!isPrivate || !current().sourcePath;
     $('delete-post').disabled=publishing || !current().sourceSha;
     $('delete-post').textContent=current().kind==='page'?'Delete page':'Delete post';
   }
   let deletionTarget=null;
+  $('delete-draft').addEventListener('click',()=>{
+    if(publishing)return;
+    changed();const d=current();deletionTarget={id:d.id,draftOnly:true};
+    $('delete-heading').textContent='Delete draft?';
+    $('delete-description').textContent='Delete “'+(d.title || 'Untitled draft')+'” from this device?';
+    $('delete-detail').textContent='This removes the local draft and any unpublished edits. A published version, if any, stays on the blog.';
+    $('confirm-delete').textContent='Delete draft';
+    $('delete-dialog').showModal();
+  });
   $('delete-post').addEventListener('click',()=>{
     if(publishing || !current().sourcePath || !current().sourceSha)return;
     changed();const d=current();deletionTarget={id:d.id,path:d.sourcePath,sha:d.sourceSha,title:d.title};
     $('delete-heading').textContent=d.kind==='page'?'Delete reference page?':'Delete published post?';
     $('delete-description').textContent='Remove “'+d.title+'” from the public blog?'+(d.kind==='page'?' Existing references to this page will stop working.':'');
+    $('delete-detail').textContent='A copy stays in your drafts. The public blog updates after deployment; the original also remains recoverable from GitHub history.';
+    $('confirm-delete').textContent='Delete from blog';
     $('delete-dialog').showModal();
   });
   $('cancel-delete').addEventListener('click',()=>$('delete-dialog').close());
   $('confirm-delete').addEventListener('click',async()=>{
     if(publishing || !deletionTarget)return;
     const target=deletionTarget;deletionTarget=null;$('delete-dialog').close();
+    if(target.draftOnly){
+      const remaining=drafts.filter(d=>d.id!==target.id);
+      if(!remaining.length)remaining.push(newDraft());
+      const nextActive=remaining.some(d=>d.id===active)?active:remaining[0].id;
+      try {
+        if(saveFailed)throw new Error('Draft storage is unavailable.');
+        const previous=localStorage.getItem(key);
+        if(previous)localStorage.setItem(backupKey,previous);
+        localStorage.setItem(key,JSON.stringify({version:2,drafts:remaining,active:nextActive}));
+      }catch{
+        $('save-status').textContent='Could not save the deletion. Your draft has been kept. Use Save JSON before closing.';
+        return;
+      }
+      drafts=remaining;active=nextActive;
+      if(pendingPublishId===target.id)pendingPublishId=null;
+      load();$('save-status').textContent='Draft deleted from this device.';
+      return;
+    }
     publishing=true;$('publish').disabled=true;updateDeleteButton();$('view-published').hidden=true;
     try {
       publicationStatus('Removing “'+target.title+'” from GitHub…','Deleting');

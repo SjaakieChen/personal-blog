@@ -25,6 +25,7 @@ permalink: /write/
 <select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Reference page</option></select>
 <button id="publish" class="primary" type="button">Publish</button>
 <button id="delete-post" type="button" hidden>Delete post</button>
+<button id="delete-draft" type="button">Delete draft</button>
 <button id="connect-github" class="connection-dot" data-connected="false" type="button" aria-label="Open private writing desk" title="Open private writing desk"></button>
 <button id="download" type="button">Save JSON</button>
 <button id="restore" type="button">Import JSON</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
@@ -48,7 +49,7 @@ permalink: /write/
 <dialog id="delete-dialog" aria-labelledby="delete-heading">
 <h2 id="delete-heading">Delete published post?</h2>
 <p id="delete-description"></p>
-<p>A copy stays in your drafts. The public blog updates after deployment; the original also remains recoverable from GitHub history.</p>
+<p id="delete-detail">A copy stays in your drafts. The public blog updates after deployment; the original also remains recoverable from GitHub history.</p>
 <div class="actions"><button id="confirm-delete" type="button">Delete from blog</button><button id="cancel-delete" type="button" autofocus>Cancel</button></div>
 </dialog>
 <dialog id="reference-dialog" aria-labelledby="reference-heading">
