@@ -301,7 +301,7 @@
   }
   $('publish').addEventListener('click',publishCurrent);
   $('connect-github').addEventListener('click',connectGitHub);
-  let referenceTarget='body', referenceRange=null;
+  let referenceTarget='body', referenceRange=null, importedCitation=false;
   function renderReferencePreview() {
     const d=current(), refs=d.references || [], key=core.referenceKey(d);
     $('reference-preview').innerHTML=core.renderReferences(refs,key);
@@ -319,6 +319,7 @@
   }
   function openReference(target='body',id='') {
     referenceTarget=target;referenceRange=selectionRange?.cloneRange();
+    importedCitation=false;$('imported-citation').hidden=true;
     const d=current(), refs=d.references || [];
     $('reference-form').reset();$('reference-error').textContent='';
     $('reference-existing').replaceChildren(new Option('New source',''),...refs.map(r=>new Option(r.title,r.id)));
@@ -332,6 +333,22 @@
     $('reference-heading').textContent=target==='quote'?'Quote source':target==='edit'?'Edit source':'Add a reference';
     $('reference-dialog').showModal();
   }
+  function importCitation(data) {
+    const citation=core.parseCitation(data);
+    const target=$('reference-dialog').open && referenceTarget==='quote'?'quote':'body';
+    if($('reference-dialog').open)$('reference-dialog').close();
+    openReference(target);
+    const existing=(current().references || []).find(r=>r.url===citation.source.url);
+    $('reference-existing').value=existing?.id || '';
+    fillReference(citation.source);$('reference-locator').value=citation.locator;
+    importedCitation=true;$('imported-citation').hidden=false;
+    $('citation-text').value=citation.quote;
+    $('citation-placement').value=target==='quote'?'opening-quote':!citation.quote || (referenceRange && !referenceRange.collapsed)?'body-reference':'body-quote';
+    $('reference-quoted').parentElement.hidden=true;
+    $('reference-heading').textContent='Review citation';
+    $('reference-form').querySelector('[type=submit]').textContent='Insert citation';
+  }
+  $('import-citation').addEventListener('click',()=>$('restore-file').click());
   $('add-reference').addEventListener('click',()=>openReference());
   $('cite-quote').addEventListener('click',()=>openReference('quote'));
   $('reference-cancel').addEventListener('click',()=>$('reference-dialog').close());
@@ -345,18 +362,26 @@
   });
   $('reference-form').addEventListener('submit',e=>{
     e.preventDefault();const d=current();
+    const placement=importedCitation?$('citation-placement').value:null;
+    const importedQuote=importedCitation?$('citation-text').value.trim():'';
+    if(importedCitation && placement!=='body-reference' && !importedQuote){$('reference-error').textContent='Add quoted text, or choose Reference only.';return;}
+    if(importedCitation)referenceTarget=placement==='opening-quote'?'quote':'body';
     const r={id:$('reference-existing').value || crypto.randomUUID()};
     for(const [field,name] of [['title','title'],['url','url'],['author','author'],['details','details'],['saved','savedUrl'],['note','note']]) r[name]=$('reference-'+field).value.trim();
     if(!r.title || !core.safeURL(r.url) || (r.savedUrl && !core.safeURL(r.savedUrl))) {$('reference-error').textContent='Add a title and a valid https:// URL or site path.';return;}
     d.references ||= [];const i=d.references.findIndex(ref=>ref.id===r.id);if(i<0)d.references.push(r);else d.references[i]=r;
     const locator=$('reference-locator').value.trim();
-    if(referenceTarget==='quote') {d.quoteReference=r.id;d.quoteLocator=locator;}
+    if(referenceTarget==='quote') {
+      if(importedCitation)$('quote').textContent=importedQuote;
+      d.quoteReference=r.id;d.quoteLocator=locator;
+    }
     $('reference-dialog').close();
     if(referenceTarget==='body') {
       $('body').focus();const selection=window.getSelection();
       if(referenceRange && $('body').contains(referenceRange.commonAncestorContainer)) {selection.removeAllRanges();selection.addRange(referenceRange);}
       else {const range=document.createRange();range.selectNodeContents($('body'));range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
-      const quoted=$('reference-quoted').checked, text=quoted?selection.toString():'';
+      const quoted=importedCitation?placement==='body-quote':$('reference-quoted').checked;
+      const text=importedCitation?importedQuote:quoted?selection.toString():'';
       if(!quoted)selection.collapseToEnd();
       const html=(quoted?'<q>'+core.escapeHTML(text)+'</q>':'')+core.citation(r.id,d.references,core.referenceKey(d),locator)+'&nbsp;';
       document.execCommand('insertHTML',false,html);
@@ -371,14 +396,17 @@
     const file=$('restore-file').files[0];if(!file)return;
     try {
       if(file.size>10000000)throw new Error('Backup is too large.');
-      const data=JSON.parse(await file.text());if(!data || !Array.isArray(data.drafts) || !data.drafts.every(acceptDraft))throw new Error('Invalid backup.');
+      const data=JSON.parse(await file.text());
+      if(data?.type==='blog-citation'){importCitation(data);return;}
+      if($('reference-dialog').open)throw new Error('Choose a citation JSON file here. Import draft files from the main toolbar.');
+      if(!data || !Array.isArray(data.drafts) || !data.drafts.every(acceptDraft))throw new Error('Invalid draft or citation JSON.');
       for(const incoming of data.drafts) {
         const same=drafts.find(d=>d.id===incoming.id);
         if(same && JSON.stringify(same)===JSON.stringify(incoming))continue;
         drafts.push({...incoming,id:same?crypto.randomUUID():incoming.id,doc:incoming.doc || core.plainDocument(incoming.body)});
       }
       saveFailed=false;renderNav();save();$('index-status').textContent='JSON imported. Existing drafts kept.';
-    }catch(e){$('index-status').textContent=e.message;}finally{$('restore-file').value='';}
+    }catch(e){($('reference-dialog').open?$('reference-error'):$('index-status')).textContent=e.message;}finally{$('restore-file').value='';}
   });
   function refreshIndex(){return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
     published=[...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path));renderNav();

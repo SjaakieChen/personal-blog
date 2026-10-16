@@ -1,9 +1,24 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {prepare: build, render} = require('../assets/writer-core.js');
+const {parseCitation}=require('../assets/writer-core.js');
 const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
 const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
 const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
+
+test('citation JSON validates schema and URLs and preserves the quoted text',()=>{
+  const data=require('../assets/citations/genesis-1-3.json');
+  const citation=parseCitation(data);
+  assert.equal(citation.quote,'And God said, Let there be light: and there was light.');
+  assert.equal(citation.locator,'Genesis 1:3');
+  assert.equal(citation.source.author,'');
+  assert.throws(()=>parseCitation({...data,version:2}),/version 1/);
+  for(const url of ['javascript:alert(1)','data:text/html,test','//example.org','/\\example.org'])assert.throws(()=>parseCitation({...data,source:{...data.source,url}}),/valid source URL/);
+  for(const value of [null,{},[],42,'a'.repeat(20001)])assert.throws(()=>parseCitation({...data,quote:value}),/Invalid citation quote/);
+  assert.throws(()=>parseCitation({...data,source:{...data.source,title:''}}),/title/);
+  const malicious=parseCitation({...data,quote:'<img src=x onerror=alert(1)>'});
+  assert.ok(!render([{runs:[{text:malicious.quote,quoted:true}]}]).includes('<img'));
+});
 test('quotes require a source, while repeated citations share a target',()=>{
   assert.throws(()=>prepare({...draft,quote:'Quoted text'}),/reference for the opening quote/);
   assert.throws(()=>prepare({...draft,doc:[{runs:[{text:'Quoted',quoted:true}]}]}),/quotation and citation/);

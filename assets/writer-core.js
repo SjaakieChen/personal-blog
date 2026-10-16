@@ -10,6 +10,18 @@
     if(/^\/(?!\/)/.test(value)) return value;
     try {return ['https:','http:'].includes(new URL(value).protocol)?value:'';} catch {return '';}
   }
+  function parseCitation(data) {
+    if(!data || data.type!=='blog-citation' || data.version!==1 || !data.source || typeof data.source!=='object' || Array.isArray(data.source)) throw new Error('Use a version 1 blog-citation JSON file.');
+    const text=(value,name)=>{
+      if(value===undefined)return '';
+      if(typeof value!=='string' || value.length>20000)throw new Error('Invalid citation '+name+'.');
+      return value.trim();
+    };
+    const source={};
+    for(const field of ['title','url','author','details','savedUrl','note'])source[field]=text(data.source[field],field);
+    if(!source.title || !safeURL(source.url) || (source.savedUrl && !safeURL(source.savedUrl)))throw new Error('The citation needs a title and a valid source URL.');
+    return {source,quote:text(data.quote,'quote'),locator:text(data.locator,'locator')};
+  }
   const referenceKey = draft => 'ref-'+String(draft.referenceKey || draft.id).replace(/[^a-zA-Z0-9_-]/g,'');
   function citation(id, references=[], key='preview', locator='') {
     const i=references.findIndex(r=>r.id===id);
@@ -64,7 +76,7 @@
     const url=draft.sourcePath ? 'https://github.com/SjaakieChen/personal-blog/edit/main/'+filename : 'https://github.com/SjaakieChen/personal-blog/new/main?filename='+encodeURIComponent(filename);
     return {filename,content,url};
   }
-  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences};
+  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,parseCitation};
   root.BlogWriter=api;
   if(typeof module!=='undefined' && module.exports) module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

@@ -55,6 +55,11 @@ permalink: /write/
 <dialog id="reference-dialog" aria-labelledby="reference-heading">
 <form id="reference-form" autocomplete="off">
 <h2 id="reference-heading">Add a reference</h2>
+<button id="import-citation" type="button">Import citation JSON</button>
+<div id="imported-citation" hidden>
+<label>Quoted text<textarea id="citation-text" rows="3"></textarea></label>
+<label>Insert as<select id="citation-placement"><option value="body-quote">Quote and reference in post</option><option value="body-reference">Reference only, after selected text</option><option value="opening-quote">Opening quote and reference</option></select></label>
+</div>
 <label>Use a source<select id="reference-existing"><option value="">New source</option></select></label>
 <label>Your reference pages<select id="reference-page"><option value="">Choose a page (optional)</option></select></label>
 <label>Title<input id="reference-title" autocomplete="off" required></label>
