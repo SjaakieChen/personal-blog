@@ -56,7 +56,7 @@
   }
   function noteMarker(id, notes=[], key='preview') {
     const i=notes.findIndex(n=>n.id===id);
-    return '<sup class="citation explanation-marker" contenteditable="false" data-note="'+escapeHTML(id)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-note-'+(i+1)+'" aria-label="Explanation '+(i+1)+'">'+(i<0?'*?':'*'.repeat(i+1))+'</a></sup>';
+    return '<sup class="citation explanation-marker" contenteditable="false" data-note="'+escapeHTML(id)+'"><a href="#'+escapeHTML(key)+'-note-'+(i+1)+'" aria-label="Explanation '+(i+1)+'">'+(i<0?'*?':'*'.repeat(i+1))+'</a></sup>';
   }
   function renderNotes(doc, notes=[], key='preview') {
     const used=usedNotes(doc,notes);

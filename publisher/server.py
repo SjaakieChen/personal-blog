@@ -8,9 +8,9 @@ import re
 import subprocess
 import threading
 import time
+import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit, parse_qs
-from urllib.request import urlopen
+from urllib.parse import urlsplit, parse_qs, urlencode
 
 REPO = 'SjaakieChen/personal-blog'
 PUBLIC = 'https://sjaakiechen.github.io/personal-blog'
@@ -24,10 +24,103 @@ login_process = None
 login_output = ''
 login_result = ''
 identity = None
+source_cache = {}
+entry_cache = {}
+index_lock = threading.Lock()
 
 
 def valid_path(path):
     return isinstance(path, str) and re.fullmatch(r'(?:_posts|pages)/[a-zA-Z0-9_-]+\.md', path) is not None
+
+
+def parse_source(content):
+    """Read the writer's one-line JSON front matter without executing YAML."""
+    parts = content.split('---\n', 2)
+    if len(parts) != 3 or parts[0]:
+        raise ValueError('Invalid document header.')
+    fields = {}
+    for line in parts[1].splitlines():
+        name, sep, value = line.partition(':')
+        if sep:
+            value = value.strip()
+            try:
+                fields[name] = json.loads(value)
+            except ValueError:
+                fields[name] = value.strip("'\"")
+    return fields, parts[2].strip()
+
+
+def repository_sources():
+    revision = gh_api(f'repos/{REPO}/git/ref/heads/main')['object']['sha']
+    tree = gh_api(f'repos/{REPO}/git/trees/{revision}?recursive=1')
+    if tree.get('truncated'):
+        raise RuntimeError('GitHub returned an incomplete post list. Try again before publishing.')
+    entries = []
+    for item in tree['tree']:
+        if item['type'] != 'blob' or not valid_path(item['path']):
+            continue
+        sha = item['sha']
+        if sha not in source_cache:
+            blob = gh_api(f'repos/{REPO}/git/blobs/{sha}')
+            source_cache[sha] = parse_source(base64.b64decode(blob['content']).decode('utf-8'))
+        fields, html = source_cache[sha]
+        entries.append((item['path'], sha, fields, html))
+    return revision, entries
+
+
+def ensure_unique_title(path, content):
+    fields, _ = parse_source(content)
+    def normalized(value):
+        return ' '.join(unicodedata.normalize('NFKC', str(value)).casefold().split())
+    title = normalized(fields.get('title', ''))
+    if not title:
+        raise ValueError('Add a title before publishing.')
+    _, entries = repository_sources()
+    for other, _, meta, _ in entries:
+        if other != path and other.split('/')[0] == path.split('/')[0] and normalized(meta.get('title', '')) == title:
+            error = RuntimeError('A post or reference page with this title already exists. Open it to edit, or choose a different title.')
+            error.status = 409
+            raise error
+
+
+def writing_index():
+    # Read GitHub, not a Pages build that may still include a deleted post.
+    with index_lock:
+        revision, entries = repository_sources()
+        result = {'posts': [], 'pages': []}
+        for path, sha, fields, html in entries:
+            cache_key = (path, sha)
+            if cache_key not in entry_cache:
+                history = []
+                page = 1
+                while True:
+                    query = urlencode({'path': path, 'sha': revision, 'per_page': 100, 'page': page})
+                    commits = gh_api(f'repos/{REPO}/commits?{query}')
+                    history.extend(commits)
+                    if len(commits) < 100:
+                        break
+                    page += 1
+                if not history:
+                    raise RuntimeError('Could not load publication dates from GitHub.')
+                newest = history[0]['commit']['committer']['date']
+                oldest = history[-1]['commit']['committer']['date']
+                kind = 'post' if path.startswith('_posts/') else 'page'
+                slug = re.sub(r'^\d{4}-\d{2}-\d{2}-', '', Path(path).stem)
+                permalink = fields.get('permalink') or '/posts/'+slug+'/'
+                entry_cache[cache_key] = {
+                    'path': path, 'sourceSha': sha, 'kind': kind,
+                    'title': fields.get('title', ''), 'quote': fields.get('quote', ''),
+                    'html': html, 'date': fields.get('date', oldest),
+                    'publishedAt': oldest, 'editedAt': newest if len(history) > 1 else None,
+                    'url': '/personal-blog'+permalink, 'permalink': permalink,
+                    'references': fields.get('references', []), 'notes': fields.get('notes', []),
+                    'referenceKey': fields.get('reference_key'),
+                    'quoteReference': fields.get('quote_reference'), 'quoteLocator': fields.get('quote_locator')
+                }
+            result['posts' if path.startswith('_posts/') else 'pages'].append(entry_cache[cache_key])
+        for entries in result.values():
+            entries.sort(key=lambda entry: entry['publishedAt'], reverse=True)
+        return result
 
 
 def gh_api(path, method='GET', payload=None):
@@ -102,11 +195,14 @@ def publish(data):
         error = RuntimeError('The published file was removed. Your draft is still saved; reload the published list before retrying.')
         error.status = 409
         raise error
+    ensure_unique_title(path, content)
     payload = {'message': ('Update ' if existing else 'Publish ')+path,
                'content': base64.b64encode(content.encode('utf-8')).decode(), 'branch': 'main'}
     if existing:
         payload['sha'] = existing['sha']
     result = gh_api(endpoint, 'PUT', payload)
+    with index_lock:
+        entry_cache.clear()
     return {'sha': result['content']['sha'], 'commit': result['commit']['sha'],
             'time': result['commit']['committer']['date'], 'unchanged': False}
 
@@ -127,6 +223,8 @@ def delete_entry(data):
         error.status = 409
         raise error
     result = gh_api(endpoint, 'DELETE', {'message': 'Remove '+path, 'sha': base_sha, 'branch': 'main'})
+    with index_lock:
+        entry_cache.clear()
     return {'commit': result['commit']['sha'], 'alreadyRemoved': False}
 
 
@@ -160,9 +258,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {'connected': bool(user), 'login': user, 'code': login_output,
                                        'verificationUrl': 'https://github.com/login/device', 'error': login_result})
             if path == '/writing-index.json':
-                with urlopen(PUBLIC+'/writing-index.json?fresh='+str(time.time_ns()), timeout=20) as response:
-                    data = json.load(response)
-                return self.send(200, data)
+                return self.send(200, writing_index())
             if path == '/api/deployment':
                 commit = parse_qs(urlsplit(self.path).query).get('commit', [''])[0]
                 if not re.fullmatch(r'[a-f0-9]{40}', commit):

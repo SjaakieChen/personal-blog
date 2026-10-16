@@ -12,7 +12,7 @@ spec.loader.exec_module(publisher)
 class PublishingTests(unittest.TestCase):
     def test_create_preserves_unicode_and_fixed_repository(self):
         missing = RuntimeError('not found'); missing.status = 404
-        with patch.object(publisher, 'gh_api', side_effect=[missing, {'content': {'sha': 'new'}, 'commit': {'sha':'commit','committer': {'date':'now'}}}]) as api:
+        with patch.object(publisher, 'repository_sources', return_value=('head', [])), patch.object(publisher, 'gh_api', side_effect=[missing, {'content': {'sha': 'new'}, 'commit': {'sha':'commit','committer': {'date':'now'}}}]) as api:
             result = publisher.publish({'path':'_posts/2026-10-15-test.md','content':'---\ntitle: Test\n---\n你好'})
             call = api.call_args
             self.assertTrue(call.args[0].startswith('repos/SjaakieChen/personal-blog/contents/'))
@@ -33,9 +33,30 @@ class PublishingTests(unittest.TestCase):
             self.assertEqual(api.call_count, 1)
 
     def test_matching_revision_can_update(self):
-        with patch.object(publisher, 'gh_api', side_effect=[{'sha':'base','content':base64.b64encode(b'old').decode()}, {'content':{'sha':'updated'},'commit':{'sha':'commit','committer':{'date':'now'}}}]) as api:
-            publisher.publish({'path':'pages/source.md','content':'---\nUpdated','baseSha':'base'})
+        with patch.object(publisher, 'repository_sources', return_value=('head', [('pages/source.md', 'base', {'title':'Same title'}, '')])), patch.object(publisher, 'gh_api', side_effect=[{'sha':'base','content':base64.b64encode(b'old').decode()}, {'content':{'sha':'updated'},'commit':{'sha':'commit','committer':{'date':'now'}}}]) as api:
+            publisher.publish({'path':'pages/source.md','content':'---\ntitle: "Same title"\n---\nUpdated','baseSha':'base'})
             self.assertEqual(api.call_args.args[2]['sha'],'base')
+
+    def test_duplicate_title_is_rejected_before_any_write(self):
+        missing=RuntimeError('not found');missing.status=404
+        for title in ['Genesis', '  GENESIS  ', 'Ｇｅｎｅｓｉｓ']:
+            with patch.object(publisher, 'repository_sources', return_value=('head', [('_posts/older.md','sha',{'title':'Genesis'},'')])), patch.object(publisher,'gh_api',side_effect=missing) as api:
+                with self.assertRaisesRegex(RuntimeError,'title already exists'):
+                    publisher.publish({'path':'_posts/new.md','content':'---\ntitle: "'+title+'"\n---\nText'})
+                self.assertEqual(api.call_count,1)
+
+    def test_current_index_excludes_deleted_files_and_uses_git_dates(self):
+        publisher.entry_cache.clear()
+        entries=[('_posts/new.md','new',{'title':'New'},'<p>New</p>'),('_posts/old.md','old',{'title':'Old'},'<p>Old</p>')]
+        def history(endpoint):
+            day='15' if 'new.md' in endpoint else '01'
+            return [{'commit':{'committer':{'date':'2026-10-'+day+'T12:00:00Z'}}}]
+        with patch.object(publisher,'repository_sources',return_value=('head',entries)),patch.object(publisher,'gh_api',side_effect=history):
+            index=publisher.writing_index()
+            self.assertEqual([p['title'] for p in index['posts']],['New','Old'])
+            self.assertEqual(index['posts'][0]['sourceSha'],'new')
+        with patch.object(publisher,'repository_sources',return_value=('head',entries[1:])):
+            self.assertEqual([p['title'] for p in publisher.writing_index()['posts']],['Old'])
 
     def test_only_content_paths_are_accepted(self):
         for path in ['../secret', '.github/workflows/pages.yml', 'assets/writer.js', 'pages/../../file.md']:

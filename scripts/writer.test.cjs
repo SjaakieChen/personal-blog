@@ -74,13 +74,15 @@ test('explanation notes follow text order, remain separate from sources, and esc
   assert.throws(()=>prepare({...draft,notes:[notes[0],notes[0]]}),/unique ID/);
 });
 
-test('body links, citations, source links, saved copies and note markers open a new tab',()=>{
+test('links and citations open separately but explanation markers stay on the same page',()=>{
   const notes=[{id:'note',text:'Explanation'}];
   const doc=[{runs:[{text:'Linked sentence',link:'/reference-page/',reference:'source-1',note:'note'}]}];
   const prepared=prepare({...draft,doc,references,notes});
   const links=prepared.content.match(/<a\b[^>]*>/g);
   assert.equal(links.length,5);
-  links.forEach(a=>{assert.match(a,/target="_blank"/);assert.match(a,/rel="noopener noreferrer"/);});
+  const note=links.find(a=>a.includes('-note-'));
+  assert.doesNotMatch(note,/target=/);
+  links.filter(a=>a!==note).forEach(a=>{assert.match(a,/target="_blank"/);assert.match(a,/rel="noopener noreferrer"/);});
 });
 
 test('citation JSON validates schema and URLs and preserves the quoted text',()=>{

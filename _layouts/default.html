@@ -10,7 +10,7 @@
 <a class="skip-link" href="#posts">Skip to posts</a>
 <div class="blog-shell">
 <aside class="sidebar" aria-label="Post navigation"><nav class="timeline" aria-label="Posts by date">
-{% assign previous_date = '' %}{% for post in site.posts %}
+{% assign newest_posts = site.posts | sort: 'published_at' | reverse %}{% assign previous_date = '' %}{% for post in newest_posts %}
 {% assign published = post.published_at | default: post.date %}{% assign post_day = published | date: '%Y-%m-%d' %}
 {% assign group_position = forloop.index0 | modulo: 3 %}{% if post_day != previous_date or group_position == 0 %}<time class="nav-date" datetime="{{ post_day }}">{{ published | date: '%-d %B %Y' }}</time>{% assign previous_date = post_day %}{% endif %}
 <a target="_blank" rel="noopener noreferrer" href="{{ post.url | relative_url }}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>

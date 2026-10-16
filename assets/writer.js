@@ -2,6 +2,8 @@
   'use strict';
   const $=id=>document.getElementById(id), core=BlogWriter;
   const key='jiaqi-writing-desk-v1', backupKey=key+'-backup';
+  const syncKey=key+'-synced-v3', sync=BlogDraftSync;
+  let deletedDrafts=new Set(), baseline=[], saveQueue=Promise.resolve();
   let drafts=[], active, published=[], selectionRange=null, saveFailed=false;
   const newDraft=()=>({id:crypto.randomUUID(),kind:'post',title:'',quote:'',doc:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   function acceptDraft(d) {
@@ -12,8 +14,12 @@
     drafts=value.drafts.map(d=>({...d,doc:d.doc || core.plainDocument(d.body)})); active=value.active;
   }
   try {
-    const saved=localStorage.getItem(key);
-    if(saved) { try { restore(JSON.parse(saved)); } catch { restore(JSON.parse(localStorage.getItem(backupKey))); } }
+    const saved=localStorage.getItem(syncKey) || localStorage.getItem(key);
+    let state={};
+    if(saved) { try { state=JSON.parse(saved);restore(state); } catch { state=JSON.parse(localStorage.getItem(backupKey));restore(state); } }
+    deletedDrafts=new Set(state.deleted || []);
+    drafts=drafts.filter(d=>!deletedDrafts.has(d.id));baseline=structuredClone(drafts);
+    active=sessionStorage.getItem(key+'-active') || active;
   } catch { $('index-status').textContent='Could not read stored drafts. Use Import JSON if needed.'; saveFailed=true; }
   if(!drafts.length) drafts.push(newDraft());
   if(!drafts.some(d=>d.id===active)) active=drafts[0].id;
@@ -41,7 +47,7 @@
     const desk=window.open(privateOrigin+'/write/?import=1','jiaqi-private-writer');
     if(!desk){publicationStatus('Allow this site to open the private writing desk, then click Publish again.');return;}
     publicationStatus('Opening your private desk on Yoga. Tailscale must be connected. Your drafts remain saved here.');
-    const transfer={version:2,drafts,active};
+    const transfer={version:3,drafts,active,deleted:[...deletedDrafts]};
     function receive(event) {
       if(event.origin!==privateOrigin || event.source!==desk)return;
       if(event.data?.type==='blog-desk-ready')desk.postMessage({type:'blog-desk-import',data:transfer,publish:shouldPublish},privateOrigin);
@@ -94,12 +100,16 @@
     if(publishing)return;
     let publishingDraft;
     try {
-      changed();const d=current();publishingDraft=d;core.prepare(d);
+      changed();if(titleConflict)throw new Error(titleConflict);
+      const d=current();publishingDraft=d;core.prepare(d);
       if(!isPrivate){handoff(true);return;}
       publishing=true;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
       const session=await api('/api/session');
       connectionStatus(session.connected);
       if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
+      await refreshIndex();
+      const titleKey=value=>value.normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();
+      if(published.some(p=>p.kind===d.kind && p.path!==d.sourcePath && p.path!==d.targetPath && titleKey(p.title)===titleKey(d.title)))throw new Error('A '+(d.kind==='page'?'reference page':'post')+' with this title already exists. Open it to edit, or choose a different title.');
       // Keep the exact request for a safe retry if the response is lost.
       const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator,d.notes]);
       if(!d.pendingPublication || d.pendingPublication.fingerprint!==fingerprint) {
@@ -117,7 +127,8 @@
       if(d.kind==='post')d.originalDate=originalDate;
       else d.permalink=permalink;
       if(!result.unchanged){if(wasPublished)d.editedAt=result.time;else d.publishedAt=result.time;}
-      delete d.pendingPublication;save();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;updateDeleteButton();}
+      d.publishedFingerprint=writingFingerprint(d);
+      delete d.pendingPublication;save();refreshIndex();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;updateDeleteButton();}
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
       $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(d.kind==='page'?d.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
       publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
@@ -146,7 +157,7 @@
     changed();const d=current();deletionTarget={id:d.id,path:d.sourcePath,sha:d.sourceSha,title:d.title};
     $('delete-heading').textContent=d.kind==='page'?'Delete reference page?':'Delete published post?';
     $('delete-description').textContent='Remove “'+d.title+'” from the public blog?'+(d.kind==='page'?' Existing references to this page will stop working.':'');
-    $('delete-detail').textContent='A copy stays in your drafts. The public blog updates after deployment; the original also remains recoverable from GitHub history.';
+    $('delete-detail').textContent='This also removes its local draft copies. The original remains recoverable from GitHub history.';
     $('confirm-delete').textContent='Delete from blog';
     $('delete-dialog').showModal();
   });
@@ -155,19 +166,12 @@
     if(publishing || !deletionTarget)return;
     const target=deletionTarget;deletionTarget=null;$('delete-dialog').close();
     if(target.draftOnly){
-      const remaining=drafts.filter(d=>d.id!==target.id);
-      if(!remaining.length)remaining.push(newDraft());
-      const nextActive=remaining.some(d=>d.id===active)?active:remaining[0].id;
-      try {
-        if(saveFailed)throw new Error('Draft storage is unavailable.');
-        const previous=localStorage.getItem(key);
-        if(previous)localStorage.setItem(backupKey,previous);
-        localStorage.setItem(key,JSON.stringify({version:2,drafts:remaining,active:nextActive}));
-      }catch{
+      deletedDrafts.add(target.id);
+      if(!await save()){
+        deletedDrafts.delete(target.id);
         $('save-status').textContent='Could not save the deletion. Your draft has been kept. Use Save JSON before closing.';
         return;
       }
-      drafts=remaining;active=nextActive;
       if(pendingPublishId===target.id)pendingPublishId=null;
       load();$('save-status').textContent='Draft deleted from this device.';
       return;
@@ -177,9 +181,9 @@
       publicationStatus('Removing “'+target.title+'” from GitHub…','Deleting');
       const result=await api('/api/delete',{path:target.path,baseSha:target.sha});
       removedPaths.add(target.path);published=published.filter(p=>p.path!==target.path);
-      for(const d of drafts)if(d.sourcePath===target.path){d.targetPath=target.path;delete d.sourcePath;delete d.sourceSha;delete d.publishedAt;delete d.editedAt;delete d.pendingPublication;delete d.conflict;}
-      save();renderNav();timestamp(current());
-      publicationStatus(result.alreadyRemoved?'Already removed from GitHub. A copy remains in your drafts.':'Removed from GitHub. A copy remains in your drafts; the public blog is updating…','Deleted from GitHub');
+      for(const d of drafts)if(d.sourcePath===target.path)deletedDrafts.add(d.id);
+      const saved=await save();load();
+      publicationStatus(!saved?'Removed from GitHub, but local draft cleanup could not be saved. Use Save JSON before closing.':result.alreadyRemoved?'Already removed from GitHub.':'Removed from GitHub and your drafts. The public blog is updating…','Deleted from GitHub');
       if(result.commit)watchDeployment(result.commit,target.title,true);
     }catch(error){
       if(error.status===409){const d=drafts.find(d=>d.id===target.id);if(d)d.conflict=true;save();refreshIndex();}
@@ -223,16 +227,37 @@
     container.childNodes.forEach(child=>walk(child)); flush(); return blocks;
   }
   function save() {
-    if(saveFailed) { $('save-status').textContent='Autosave unavailable. Use Save JSON before closing.'; return; }
-    try {
-      const previous=localStorage.getItem(key);
-      if(previous) localStorage.setItem(backupKey,previous);
-      localStorage.setItem(key,JSON.stringify({version:2,drafts,active}));
-      $('save-status').textContent='Saved on this device'+(current().updatedAt?' · '+new Date(current().updatedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
-    } catch { $('save-status').textContent='Could not save. Use Save JSON before closing.'; }
+    if(saveFailed) { $('save-status').textContent='Autosave unavailable. Use Save JSON before closing.'; return Promise.resolve(false); }
+    const commit=()=>{
+      const stored=localStorage.getItem(syncKey);
+      const remote=stored?JSON.parse(stored):{drafts:baseline,deleted:[]};
+      if(!Array.isArray(remote.drafts) || !remote.drafts.every(acceptDraft))throw new Error('Invalid stored drafts');
+      const previous=current(), oldActive=active;
+      const merged=sync.merge(baseline,drafts,remote,[...deletedDrafts],()=>crypto.randomUUID());
+      if(!merged.drafts.length)merged.drafts.push(newDraft());
+      const nextActive=merged.remapped.get(active) || (merged.drafts.some(d=>d.id===active)?active:merged.drafts[0].id);
+      const next=JSON.stringify({version:3,drafts:merged.drafts,deleted:merged.deleted});
+      if(stored!==next){
+        const backup=stored || localStorage.getItem(key);if(backup)localStorage.setItem(backupKey,backup);
+        localStorage.setItem(syncKey,next);
+      }
+      drafts=merged.drafts;deletedDrafts=new Set(merged.deleted);active=nextActive;baseline=structuredClone(drafts);
+      // The legacy copy is only an export for older tabs; it cannot replace the canonical store.
+      try{localStorage.setItem(key,JSON.stringify({version:3,drafts,active,deleted:merged.deleted}));sessionStorage.setItem(key+'-active',active);}catch{}
+      if(!sync.same(previous,current()) || oldActive!==active){const view=captureWriterView();load();restoreWriterView(view);}
+      else renderNav();
+      $('save-status').textContent=titleConflict || 'Saved on this device'+(current().updatedAt?' · '+new Date(current().updatedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
+      return true;
+    };
+    saveQueue=saveQueue.then(()=>navigator.locks.request(syncKey,commit)).catch(()=>{$('save-status').textContent='Could not save. Use Save JSON before closing.';return false;});
+    return saveQueue;
   }
+  window.addEventListener('storage',event=>{if(event.key===syncKey && event.newValue)save();});
+  function writingFingerprint(d){return JSON.stringify([d.kind,d.title,d.quote || '',core.render(d.doc || core.plainDocument(d.body || ''),core.usedReferences(d),'comparison',d.notes),core.usedReferences(d),d.quoteReference || '',d.quoteLocator || '',d.notes || []]);}
+  function entryDraft(entry){const template=document.createElement('template');template.innerHTML=entry.html;return {...entry,doc:readDocument(template.content),quote:entry.quote || '',references:entry.references || [],notes:entry.notes || []};}
+  const newestFirst=field=>(a,b)=>(Date.parse(b[field] || b.date) || 0)-(Date.parse(a[field] || a.date) || 0) || String(a.path || a.id).localeCompare(String(b.path || b.id));
   function renderNav() {
-    const nav=$('writing-nav'); nav.replaceChildren();
+    const nav=$('writing-nav'),sidebar=document.querySelector('.sidebar'),scroll=sidebar.scrollTop; nav.replaceChildren();
     function heading(text) {const el=document.createElement('span');el.className='nav-date';el.textContent=text;nav.append(el);}
     function item(title,id,click,label) {
       const b=document.createElement('button');b.type='button';b.textContent=title || 'Untitled draft';
@@ -241,9 +266,21 @@
       b.addEventListener('click',click);nav.append(b);
     }
     heading('Drafts');
-    drafts.forEach(d=>item(d.title,d.id,()=>{active=d.id;load();save();},d.kind==='page'?'Reference page'+(d.sourcePath?' · Unpublished edits':' · Draft'):d.sourcePath?'Unpublished edits':null));
+    const seen=new Set();
+    [...drafts].sort(newestFirst('createdAt')).forEach(d=>{
+      const entry=published.find(p=>p.path===d.sourcePath);
+      const fingerprint=writingFingerprint(d), identity=(d.sourcePath || d.id)+fingerprint;
+      if(entry)return;
+      if(seen.has(identity))return;seen.add(identity);
+      item(d.title,d.id,()=>{active=d.id;load();save();},d.kind==='page'?'Reference page'+(d.sourcePath?' · Unpublished edits':' · Draft'):d.sourcePath?'Unpublished edits':null);
+    });
     if(published.length) heading('Published');
-    published.forEach(entry=>item(entry.title,entry.path,()=>openPublished(entry),entry.kind==='page'?'Reference page':null));
+    [...published].sort(newestFirst('publishedAt')).forEach(entry=>{
+      const draft=drafts.find(d=>d.sourcePath===entry.path);
+      const edited=draft && writingFingerprint(draft)!==(draft.publishedFingerprint || writingFingerprint(entryDraft(entry)));
+      item(entry.title,draft?.id || entry.path,()=>openPublished(entry),edited?'Unpublished edits':entry.kind==='page'?'Reference page':null);
+    });
+    sidebar.scrollTop=scroll;
   }
   function timestamp(entry) {
     if(!entry.publishedAt) {$('post-time').textContent='Publication time is added automatically.';return;}
@@ -252,14 +289,24 @@
   }
   function empties() {for(const id of ['title','quote','body']) $(id).dataset.empty=String(!$(id).textContent.trim());}
   function load() {
+    titleConflict='';$('title').removeAttribute('aria-invalid');
     const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
     $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d),d.notes);$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
     $('publish-panel').hidden=true;$('view-published').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
     updateDeleteButton();
   }
+  let titleConflict='';
+  function duplicateTitle(title,d){
+    const normalized=sync.titleKey(title);
+    return normalized && (drafts.some(other=>other.id!==d.id && other.kind===d.kind && sync.titleKey(other.title)===normalized) || published.some(other=>other.path!==d.sourcePath && other.path!==d.targetPath && other.kind===d.kind && sync.titleKey(other.title)===normalized));
+  }
   function changed() {
-    const d=current();d.title=$('title').textContent;d.quote=$('quote').textContent;d.doc=readDocument($('body'));d.kind=$('kind').value;d.updatedAt=new Date().toISOString();
+    const d=current(),title=$('title').textContent,kind=$('kind').value;
+    titleConflict=duplicateTitle(title,{...d,kind})?'This title already exists. Open the existing draft or post, or choose another title.':'';
+    if(!titleConflict){d.title=title;d.kind=kind;}
+    $('title').setAttribute('aria-invalid',String(!!titleConflict));
+    d.quote=$('quote').textContent;d.doc=readDocument($('body'));d.updatedAt=new Date().toISOString();
     $('publish-panel').hidden=true;empties();renderNav();renderReferencePreview();save();
   }
   function resetTypingFormat() {
@@ -308,13 +355,26 @@
       document.execCommand(button.dataset.command,false,null);changed();
     });
   });
-  $('new-draft').addEventListener('click',()=>{const d=newDraft();drafts.unshift(d);active=d.id;load();save();$('title').focus();});
+  $('new-draft').addEventListener('click',()=>{
+    const blank=drafts.find(d=>!d.title.trim());
+    const d=blank || newDraft();if(!blank)drafts.unshift(d);
+    active=d.id;load();save();$('title').focus();
+  });
   function openPublished(entry) {
-    const existing=drafts.find(d=>d.sourcePath===entry.path && !d.conflict && d.sourceSha);
-    if(existing) active=existing.id;
+    const existing=drafts.find(d=>d.sourcePath===entry.path);
+    if(existing){
+      // Refresh an untouched cached copy in place, keeping a single sidebar entry.
+      if(existing.sourceSha!==entry.sourceSha && existing.publishedFingerprint===writingFingerprint(existing)){
+        const fresh=entryDraft(entry);
+        Object.assign(existing,{title:fresh.title,quote:fresh.quote,doc:fresh.doc,references:fresh.references,notes:fresh.notes,referenceKey:fresh.referenceKey,quoteReference:fresh.quoteReference,quoteLocator:fresh.quoteLocator,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});
+        existing.publishedFingerprint=writingFingerprint(existing);delete existing.conflict;
+      }
+      active=existing.id;
+    }
     else {
       const template=document.createElement('template');template.innerHTML=entry.html;
       const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],notes:entry.notes || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
+      d.publishedFingerprint=writingFingerprint(d);
       drafts.unshift(d);active=d.id;
     }
     load();save();
@@ -370,7 +430,7 @@
     $('note-preview').innerHTML=core.renderNotes(d.doc,d.notes,key);
     $('body').querySelectorAll('[data-note]').forEach(marker=>{
       const i=notes.findIndex(n=>n.id===marker.dataset.note), a=marker.querySelector('a');
-      if(a){a.textContent=i<0?'*?':'*'.repeat(i+1);a.href='#'+key+'-note-'+(i+1);a.setAttribute('aria-label','Explanation '+(i+1));}
+      if(a){a.textContent=i<0?'*?':'*'.repeat(i+1);a.href='#'+key+'-note-'+(i+1);a.removeAttribute('target');a.removeAttribute('rel');a.setAttribute('aria-label','Explanation '+(i+1));}
     });
     $('note-preview').querySelectorAll('li').forEach((li,i)=>{
       const button=document.createElement('button');button.type='button';button.className='edit-reference';button.textContent='Edit note';
@@ -494,6 +554,27 @@
   $('download').addEventListener('click',()=>{
     const blob=new Blob([JSON.stringify({version:2,drafts,active},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='blog-drafts-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
+  function importDrafts(data,automatic=false){
+    for(const incoming of data.drafts){
+      if(automatic && deletedDrafts.has(incoming.id))continue;
+      const normalized={...incoming,doc:incoming.doc || core.plainDocument(incoming.body)};
+      const fingerprint=writingFingerprint(normalized);
+      const existing=drafts.find(d=>(d.id===incoming.id || d.importedFrom===incoming.id || (d.sourcePath && d.sourcePath===incoming.sourcePath)) && writingFingerprint(d)===fingerprint);
+      if(existing){if(automatic && incoming.id===data.active)active=existing.id;continue;}
+      const duplicate=drafts.find(d=>d.kind===incoming.kind && sync.titleKey(d.title) && sync.titleKey(d.title)===sync.titleKey(incoming.title));
+      if(duplicate){
+        const {savedVersions:ignored,...version}=normalized;
+        duplicate.savedVersions=duplicate.savedVersions || [];
+        if(!duplicate.savedVersions.some(v=>writingFingerprint(v)===fingerprint))duplicate.savedVersions.push(version);
+        if(automatic && incoming.id===data.active)active=duplicate.id;
+        continue;
+      }
+      const collision=drafts.some(d=>d.id===incoming.id) || deletedDrafts.has(incoming.id);
+      const id=collision?crypto.randomUUID():incoming.id;
+      drafts.push({...normalized,id,referenceKey:incoming.referenceKey || incoming.id,...(collision?{importedFrom:incoming.id}:{} )});
+      if(automatic && incoming.id===data.active)active=id;
+    }
+  }
   $('restore').addEventListener('click',()=>$('restore-file').click());
   $('restore-file').addEventListener('change',async()=>{
     const file=$('restore-file').files[0];if(!file)return;
@@ -503,34 +584,36 @@
       if(data?.type==='blog-citation'){importCitation(data);return;}
       if($('reference-dialog').open)throw new Error('Choose a citation JSON file here. Import draft files from the main toolbar.');
       if(!data || !Array.isArray(data.drafts) || !data.drafts.every(acceptDraft))throw new Error('Invalid draft or citation JSON.');
-      for(const incoming of data.drafts) {
-        const same=drafts.find(d=>d.id===incoming.id);
-        if(same && JSON.stringify(same)===JSON.stringify(incoming))continue;
-        drafts.push({...incoming,id:same?crypto.randomUUID():incoming.id,doc:incoming.doc || core.plainDocument(incoming.body)});
-      }
-      saveFailed=false;renderNav();save();$('index-status').textContent='JSON imported. Existing drafts kept.';
+      importDrafts(data);
+      saveFailed=false;renderNav();if(await save())$('index-status').textContent='JSON imported. Existing drafts kept.';
     }catch(e){($('reference-dialog').open?$('reference-error'):$('index-status')).textContent=e.message;}finally{$('restore-file').value='';}
   });
-  function refreshIndex(){return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
-    published=[...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path));renderNav();
-  }).catch(()=>{$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});}
+  let indexRequest=0;
+  function refreshIndex(){const request=++indexRequest;return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
+    if(request!==indexRequest)return;
+    published=[...new Map([...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path)).map(p=>[p.path,p])).values()].sort(newestFirst('publishedAt'));renderNav();
+    if(isPrivate){
+      let cleanup=false;
+      for(const d of drafts)if(d.sourcePath && d.publishedFingerprint===writingFingerprint(d) && !published.some(p=>p.path===d.sourcePath)){
+        deletedDrafts.add(d.id);cleanup=true;
+      }
+      if(cleanup)save();
+    }
+    $('index-status').textContent='';
+  }).catch(()=>{if(request===indexRequest)$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});}
   load();save();refreshIndex();
   if(location.hash)requestAnimationFrame(()=>document.getElementById(location.hash.slice(1))?.scrollIntoView({block:'center'}));
   if(isPrivate) {
     const checkConnection=()=>api('/api/session').then(s=>connectionStatus(s.connected)).catch(()=>connectionStatus(false));
     checkConnection();setInterval(checkConnection,60000);
+    window.addEventListener('focus',()=>{save();refreshIndex();});
+    setInterval(()=>{if(!document.hidden)refreshIndex();},60000);
     if(window.opener && new URLSearchParams(location.search).has('import')) {
-      const receive=event=>{
+      const receive=async event=>{
         if(event.origin!=='https://sjaakiechen.github.io' || event.source!==window.opener || event.data?.type!=='blog-desk-import')return;
         const data=event.data.data;if(!data || !Array.isArray(data.drafts) || !data.drafts.every(acceptDraft))return;
-        for(const incoming of data.drafts) {
-          const existing=drafts.find(d=>d.id===incoming.id);
-          let id=incoming.id;
-          if(existing && JSON.stringify(existing)!==JSON.stringify(incoming))id=crypto.randomUUID();
-          if(!existing || id!==incoming.id)drafts.push({...incoming,id,referenceKey:incoming.referenceKey || incoming.id,doc:incoming.doc || core.plainDocument(incoming.body)});
-          if(incoming.id===data.active)active=id;
-        }
-        load();save();event.source.postMessage({type:'blog-desk-imported'},event.origin);window.removeEventListener('message',receive);
+        importDrafts(data,true);
+        load();if(!await save())return;event.source.postMessage({type:'blog-desk-imported'},event.origin);window.removeEventListener('message',receive);
         history.replaceState(null,'','/write/');if(event.data.publish)publishCurrent();
       };
       window.addEventListener('message',receive);window.opener.postMessage({type:'blog-desk-ready'},'https://sjaakiechen.github.io');

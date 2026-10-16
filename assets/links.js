@@ -6,6 +6,8 @@
   });
   // Also applies to links in posts published before the editor added these attributes.
   document.querySelectorAll('a[href]:not(.skip-link)').forEach(link=>{
-    link.target='_blank';link.rel='noopener noreferrer';
+    if(link.closest('.explanation-marker') && link.getAttribute('href').startsWith('#')){
+      link.removeAttribute('target');link.removeAttribute('rel');
+    }else{link.target='_blank';link.rel='noopener noreferrer';}
   });
 })();

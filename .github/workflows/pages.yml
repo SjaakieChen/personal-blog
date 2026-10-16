@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
       - name: Check writing and timestamp handling
         run: |
-          node --test scripts/writer.test.cjs
+          node --test scripts/writer.test.cjs scripts/writer-sync.test.cjs
           python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Read publication and edit times from Git
         run: python3 scripts/post_timestamps.py
