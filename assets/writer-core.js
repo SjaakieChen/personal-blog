@@ -26,25 +26,43 @@
   function citation(id, references=[], key='preview', locator='') {
     const i=references.findIndex(r=>r.id===id);
     if(i<0) return '<sup class="citation missing-reference">[?]</sup>';
-    return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'">['+(i+1)+(locator?', '+escapeHTML(locator):'')+']</a></sup>';
+    return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'">['+(i+1)+(locator?', '+escapeHTML(locator):'')+']</a></sup>';
   }
   function renderReferences(references=[], key='preview') {
     if(!references.length)return '';
     return '<section class="references" data-references="true" aria-label="References"><h2>References</h2><ol>'+references.map((r,i)=>{
-      const link=(url,label)=>safeURL(url)?'<a href="'+escapeHTML(safeURL(url))+'">'+escapeHTML(label)+'</a>':'';
+      const link=(url,label)=>safeURL(url)?'<a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(url))+'">'+escapeHTML(label)+'</a>':'';
       return '<li id="'+escapeHTML(key)+'-'+(i+1)+'">'+(link(r.url,r.title)||escapeHTML(r.title || 'Untitled source'))+(r.author?' — '+escapeHTML(r.author):'')+(r.details?'. '+escapeHTML(r.details):'')+(r.savedUrl?' <span class="reference-copy">'+link(r.savedUrl,'Saved copy')+'</span>':'')+(r.note?'<p>'+escapeHTML(r.note)+'</p>':'')+'</li>';
     }).join('')+'</ol></section>';
   }
-  function render(doc, references=[], key='preview') {
+  function validNotes(notes) {
+    return Array.isArray(notes) && notes.every(n=>n && typeof n.id==='string' && n.id && typeof n.text==='string' && n.text.trim()) && new Set(notes.map(n=>n.id)).size===notes.length;
+  }
+  function usedNotes(doc, notes=[]) {
+    const ids=[...new Set(doc.flatMap(b=>b.runs.map(r=>r.note).filter(Boolean)))];
+    return ids.map(id=>notes.find(n=>n.id===id)).filter(Boolean);
+  }
+  function noteMarker(id, notes=[], key='preview') {
+    const i=notes.findIndex(n=>n.id===id);
+    return '<sup class="citation explanation-marker" contenteditable="false" data-note="'+escapeHTML(id)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-note-'+(i+1)+'" aria-label="Explanation '+(i+1)+'">'+(i<0?'*?':'*'.repeat(i+1))+'</a></sup>';
+  }
+  function renderNotes(doc, notes=[], key='preview') {
+    const used=usedNotes(doc,notes);
+    if(!used.length)return '';
+    return '<section class="explanation-notes" data-notes="true" aria-label="Notes"><h2>Notes</h2><ul>'+used.map((n,i)=>'<li id="'+escapeHTML(key)+'-note-'+(i+1)+'"><span class="note-symbol" aria-label="Explanation '+(i+1)+'">'+'*'.repeat(i+1)+'</span><div class="note-text">'+escapeHTML(n.text).replace(/\n/g,'<br>')+'</div></li>').join('')+'</ul></section>';
+  }
+  function render(doc, references=[], key='preview', notes=[]) {
     if (!validDocument(doc)) throw new Error('Invalid draft text.');
+    const used=usedNotes(doc,notes);
     return doc.map(block=>'<p>'+block.runs.map(run=>{
       let text=escapeHTML(run.text).replace(/\n/g,'<br>');
       if(run.underline) text='<u>'+text+'</u>';
       if(run.italic) text='<em>'+text+'</em>';
       if(run.bold) text='<strong>'+text+'</strong>';
-      if(safeURL(run.link)) text='<a href="'+escapeHTML(run.link)+'">'+text+'</a>';
+      if(safeURL(run.link)) text='<a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(run.link)+'">'+text+'</a>';
       if(run.quoted) text='<q>'+text+'</q>';
       if(run.reference) text+=citation(run.reference,references,key,run.locator || '');
+      if(run.note) text+=noteMarker(run.note,used,key);
       return text;
     }).join('')+'</p>').join('\n');
   }
@@ -53,11 +71,14 @@
     if(!draft.title.trim() || !validDocument(doc) || !doc.some(b=>b.runs.some(r=>r.text.trim()))) throw new Error('Add a title and some writing first.');
     if(!['post','page'].includes(draft.kind)) throw new Error('Choose a post or a page.');
     const references=draft.references || [];
+    const notes=draft.notes || [];
+    if(!validNotes(notes))throw new Error('Each explanation needs text and a unique ID.');
     if(!Array.isArray(references) || references.some(r=>!r || typeof r.id!=='string' || !r.title?.trim() || !safeURL(r.url) || (r.savedUrl && !safeURL(r.savedUrl))) || new Set(references.map(r=>r.id)).size!==references.length) throw new Error('Each reference needs a title and a valid source link.');
     const hasReference=id=>references.some(r=>r.id===id);
     if(draft.quote?.trim() && !hasReference(draft.quoteReference)) throw new Error('Choose a reference for the opening quote before publishing.');
     for(const block of doc)for(const run of block.runs) {
       if((run.reference && !hasReference(run.reference)) || (run.quoted && !hasReference(run.reference))) throw new Error('Every quotation and citation needs a reference.');
+      if(run.note && !notes.some(n=>n.id===run.note))throw new Error('An explanation is missing. Edit or remove its asterisk before publishing.');
     }
     const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
     const slug=draft.title.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,65).replace(/-$/,'') || 'entry';
@@ -69,14 +90,15 @@
     const metadata=['---',`layout: ${draft.kind}`,`title: ${JSON.stringify(draft.title.trim())}`,`quote: ${JSON.stringify((draft.quote || '').trim())}`,'render_with_liquid: false'];
     const key=referenceKey(draft);
     metadata.push('reference_key: '+JSON.stringify(key.replace(/^ref-/,'')), 'references: '+JSON.stringify(references), 'quote_reference: '+JSON.stringify(draft.quoteReference || ''), 'quote_locator: '+JSON.stringify(draft.quoteLocator || ''));
+    metadata.push('notes: '+JSON.stringify(usedNotes(doc,notes)));
     if(draft.kind==='post') metadata.push(`date: ${JSON.stringify(draft.originalDate || now.toISOString())}`);
     else metadata.push(`permalink: ${JSON.stringify(draft.permalink || '/'+name+'/')}`);
-    const html=(render(doc,references,key)+'\n'+renderReferences(references,key)).replace(/{/g,'&#123;').replace(/}/g,'&#125;');
+    const html=(render(doc,references,key,notes)+'\n'+renderNotes(doc,notes,key)+'\n'+renderReferences(references,key)).replace(/{/g,'&#123;').replace(/}/g,'&#125;');
     const content=metadata.concat(['---','',html,'']).join('\n');
     const url=draft.sourcePath ? 'https://github.com/SjaakieChen/personal-blog/edit/main/'+filename : 'https://github.com/SjaakieChen/personal-blog/new/main?filename='+encodeURIComponent(filename);
     return {filename,content,url};
   }
-  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,parseCitation};
+  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes};
   root.BlogWriter=api;
   if(typeof module!=='undefined' && module.exports) module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

@@ -37,6 +37,13 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .references li:target { background: #edf4f9; }
 .references li p { margin: 4px 0 0; color: #5e666a; }
 .reference-copy { margin-left: 8px; font-size: .9em; }
+.explanation-notes { border-top: 1px solid #dde0e1; margin-top: 36px; padding-top: 20px; font-size: 17px; line-height: 1.6; }
+.explanation-notes h2, .post-body .explanation-notes h2 { font-size: 24px; margin: 0 0 14px; }
+.explanation-notes ul { padding: 0; margin: 0; list-style: none; }
+.explanation-notes li { display: flex; gap: 12px; margin-bottom: 14px; scroll-margin-top: 30px; }
+.explanation-notes li:target { background: #edf4f9; }
+.note-symbol { color: var(--blue); min-width: 1em; }
+.note-text { min-width: 0; }
 .quote-source { margin-top: 5px; padding-left: 18px; }
 .post-body q::before, .post-body q::after { content: none; }
 .show-more { margin-top: 16px; padding: 0; border: 0; background: none; color: var(--blue); font: inherit; font-size: 17px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }

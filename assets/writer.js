@@ -5,7 +5,7 @@
   let drafts=[], active, published=[], selectionRange=null, saveFailed=false;
   const newDraft=()=>({id:crypto.randomUUID(),kind:'post',title:'',quote:'',doc:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   function acceptDraft(d) {
-    return d && typeof d.id==='string' && typeof d.title==='string' && typeof d.quote==='string' && ['post','page'].includes(d.kind) && (core.validDocument(d.doc) || typeof d.body==='string');
+    return d && typeof d.id==='string' && typeof d.title==='string' && typeof d.quote==='string' && ['post','page'].includes(d.kind) && core.validNotes(d.notes || []) && (core.validDocument(d.doc) || typeof d.body==='string');
   }
   function restore(value) {
     if(!value || !Array.isArray(value.drafts) || !value.drafts.every(acceptDraft)) throw new Error('Invalid draft backup.');
@@ -101,7 +101,7 @@
       connectionStatus(session.connected);
       if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
       // Keep the exact request for a safe retry if the response is lost.
-      const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator]);
+      const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator,d.notes]);
       if(!d.pendingPublication || d.pendingPublication.fingerprint!==fingerprint) {
         const prepared=core.prepare(d);d.targetPath=prepared.filename;
         d.pendingPublication={fingerprint,path:prepared.filename,content:prepared.content};
@@ -197,7 +197,8 @@
       }
       if(node.nodeType!==Node.ELEMENT_NODE) return;
       const tag=node.tagName.toLowerCase();
-      if(node.hasAttribute('data-references')) return;
+      if(node.hasAttribute('data-references') || node.hasAttribute('data-notes')) return;
+      if(node.dataset.note) {runs.push({text:'',note:node.dataset.note});return;}
       if(node.dataset.reference) {
         const citation={reference:node.dataset.reference,locator:node.dataset.locator || ''};
         if(runs.at(-1)?.quoted) Object.assign(runs.at(-1),citation);
@@ -251,7 +252,7 @@
   function empties() {for(const id of ['title','quote','body']) $(id).dataset.empty=String(!$(id).textContent.trim());}
   function load() {
     const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
-    $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d));$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
+    $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d),d.notes);$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
     $('publish-panel').hidden=true;$('view-published').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
     updateDeleteButton();
@@ -267,7 +268,7 @@
     e.preventDefault(); const html=e.clipboardData.getData('text/html'); let doc;
     if(html) {const template=document.createElement('template');template.innerHTML=html;doc=readDocument(template.content);}
     else doc=core.plainDocument(e.clipboardData.getData('text/plain'));
-    doc.forEach(b=>b.runs.forEach(r=>{delete r.reference;delete r.locator;delete r.quoted;}));
+    doc.forEach(b=>b.runs.forEach(r=>{delete r.reference;delete r.locator;delete r.quoted;delete r.note;}));
     document.execCommand('insertHTML',false,core.render(doc));changed();
   });
   $('body').addEventListener('drop',e=>e.preventDefault());
@@ -294,7 +295,7 @@
     if(existing) active=existing.id;
     else {
       const template=document.createElement('template');template.innerHTML=entry.html;
-      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
+      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],notes:entry.notes || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
       drafts.unshift(d);active=d.id;
     }
     load();save();
@@ -302,7 +303,51 @@
   $('publish').addEventListener('click',publishCurrent);
   $('connect-github').addEventListener('click',connectGitHub);
   let referenceTarget='body', referenceRange=null, importedCitation=false;
+  let editingNote=null, noteRange=null;
+  function openNote(id=null) {
+    editingNote=id;noteRange=selectionRange?.cloneRange();
+    $('note-heading').textContent=id?'Edit explanation':'Add an explanation';
+    $('note-text').value=id?(current().notes || []).find(n=>n.id===id)?.text || '':'';
+    $('note-error').textContent='';$('note-remove').hidden=!id;
+    $('note-dialog').showModal();$('note-text').focus();
+  }
+  $('add-note').addEventListener('click',()=>openNote());
+  $('note-cancel').addEventListener('click',()=>$('note-dialog').close());
+  $('note-form').addEventListener('submit',e=>{
+    e.preventDefault();const text=$('note-text').value.trim();
+    if(!text){$('note-error').textContent='Write an explanation first.';return;}
+    const d=current();d.notes ||= [];
+    if(editingNote){const note=d.notes.find(n=>n.id===editingNote);if(note)note.text=text;}
+    else {
+      const note={id:crypto.randomUUID(),text};d.notes.push(note);
+      $('note-dialog').close();$('body').focus();const selection=window.getSelection();
+      const range=noteRange && $('body').contains(noteRange.commonAncestorContainer)?noteRange:document.createRange();
+      if(range!==noteRange)range.selectNodeContents($('body'));
+      range.collapse(false);selection.removeAllRanges();selection.addRange(range);
+      document.execCommand('insertHTML',false,core.noteMarker(note.id,d.notes,core.referenceKey(d))+'&nbsp;');
+    }
+    $('note-dialog').close();changed();
+  });
+  $('note-remove').addEventListener('click',()=>{
+    if(!editingNote)return;
+    current().notes=(current().notes || []).filter(n=>n.id!==editingNote);
+    $('body').querySelectorAll('[data-note]').forEach(marker=>{if(marker.dataset.note===editingNote)marker.remove();});
+    $('note-dialog').close();changed();
+  });
+  function renderNotePreview() {
+    const d=current(), key=core.referenceKey(d), notes=core.usedNotes(d.doc,d.notes);
+    $('note-preview').innerHTML=core.renderNotes(d.doc,d.notes,key);
+    $('body').querySelectorAll('[data-note]').forEach(marker=>{
+      const i=notes.findIndex(n=>n.id===marker.dataset.note), a=marker.querySelector('a');
+      if(a){a.textContent=i<0?'*?':'*'.repeat(i+1);a.href='#'+key+'-note-'+(i+1);a.setAttribute('aria-label','Explanation '+(i+1));}
+    });
+    $('note-preview').querySelectorAll('li').forEach((li,i)=>{
+      const button=document.createElement('button');button.type='button';button.className='edit-reference';button.textContent='Edit note';
+      button.addEventListener('click',()=>openNote(notes[i].id));li.querySelector('.note-text').append(button);
+    });
+  }
   function renderReferencePreview() {
+    renderNotePreview();
     const d=current(), refs=d.references || [], key=core.referenceKey(d);
     $('reference-preview').innerHTML=core.renderReferences(refs,key);
     $('quote-source').hidden=!d.quote.trim();
@@ -412,6 +457,7 @@
     published=[...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path));renderNav();
   }).catch(()=>{$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';});}
   load();save();refreshIndex();
+  if(location.hash)requestAnimationFrame(()=>document.getElementById(location.hash.slice(1))?.scrollIntoView({block:'center'}));
   if(isPrivate) {
     const checkConnection=()=>api('/api/session').then(s=>connectionStatus(s.connected)).catch(()=>connectionStatus(false));
     checkConnection();setInterval(checkConnection,60000);

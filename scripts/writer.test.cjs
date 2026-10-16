@@ -2,9 +2,38 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {prepare: build, render} = require('../assets/writer-core.js');
 const {parseCitation}=require('../assets/writer-core.js');
+const {renderNotes,usedNotes}=require('../assets/writer-core.js');
 const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
 const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
 const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
+
+test('explanation notes follow text order, remain separate from sources, and escape text',()=>{
+  const notes=[{id:'later',text:'Second explanation'},{id:'first',text:'Extra <script>detail</script>\nNext line'},{id:'unused',text:'Not attached'}];
+  const doc=[{runs:[{text:'First sentence.',note:'first'},{text:'Second sentence.',note:'later',reference:'source-1'}]}];
+  assert.deepEqual(usedNotes(doc,notes).map(n=>n.id),['first','later']);
+  const html=render(doc,references,'ref-test',notes);
+  assert.match(html,/href="#ref-test-note-1"[^>]*>\*<\/a>/);
+  assert.match(html,/href="#ref-test-note-2"[^>]*>\*\*<\/a>/);
+  assert.match(html,/>\[1\]<\/a>/);
+  const footer=renderNotes(doc,notes,'ref-test');
+  assert.match(footer,/id="ref-test-note-1"/);assert.match(footer,/&lt;script&gt;detail&lt;\/script&gt;<br>Next line/);
+  assert.ok(!footer.includes('Not attached'));
+  const prepared=prepare({...draft,doc,notes,references});
+  assert.match(prepared.content,/notes: \[\{"id":"first"/);
+  assert.ok(prepared.content.indexOf('aria-label="Notes"')<prepared.content.indexOf('aria-label="References"'));
+  assert.throws(()=>prepare({...draft,doc,notes:[],references}),/explanation is missing/);
+  assert.throws(()=>prepare({...draft,notes:[{id:'bad',text:' '}]}),/explanation needs text/);
+  assert.throws(()=>prepare({...draft,notes:[notes[0],notes[0]]}),/unique ID/);
+});
+
+test('body links, citations, source links, saved copies and note markers open a new tab',()=>{
+  const notes=[{id:'note',text:'Explanation'}];
+  const doc=[{runs:[{text:'Linked sentence',link:'/reference-page/',reference:'source-1',note:'note'}]}];
+  const prepared=prepare({...draft,doc,references,notes});
+  const links=prepared.content.match(/<a\b[^>]*>/g);
+  assert.equal(links.length,5);
+  links.forEach(a=>{assert.match(a,/target="_blank"/);assert.match(a,/rel="noopener noreferrer"/);});
+});
 
 test('citation JSON validates schema and URLs and preserves the quoted text',()=>{
   const data=require('../assets/citations/genesis-1-3.json');

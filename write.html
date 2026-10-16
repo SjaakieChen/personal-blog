@@ -8,6 +8,7 @@ permalink: /write/
 <link rel="stylesheet" href="{{ '/styles.css' | relative_url }}?v={{ site.time | date: '%s' }}">
 <link rel="stylesheet" href="{{ '/assets/writer.css' | relative_url }}?v={{ site.time | date: '%s' }}">
 <script src="{{ '/assets/writer-core.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
+<script src="{{ '/assets/links.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/writer.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script></head>
 <body class="writer" data-index="{{ '/writing-index.json' | relative_url }}">
 <div class="blog-shell">
@@ -22,6 +23,7 @@ permalink: /write/
 <button data-command="italic" type="button" aria-label="Italic" aria-pressed="false"><i>I</i></button>
 <button data-command="underline" type="button" aria-label="Underline" aria-pressed="false"><u>U</u></button>
 <button id="add-reference" type="button">Reference</button>
+<button id="add-note" type="button">* Note</button>
 <select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Reference page</option></select>
 <button id="publish" class="primary" type="button">Publish</button>
 <button id="delete-post" type="button" hidden>Delete post</button>
@@ -37,6 +39,7 @@ permalink: /write/
 <blockquote id="quote-block" class="quote"><span id="quote" class="editable-quote" contenteditable="plaintext-only" role="textbox" aria-label="Opening quote" data-placeholder="Opening quote (optional)" spellcheck="true"></span> <span id="quote-citation"></span></blockquote>
 <div id="quote-source" class="quote-source" hidden><button id="cite-quote" type="button">Choose quote source</button></div>
 <div id="body" class="post-body" contenteditable="true" role="textbox" aria-label="Post body" aria-multiline="true" data-placeholder="Start writing…" spellcheck="true"></div>
+<div id="note-preview"></div>
 <div id="reference-preview"></div>
 </article>
 <p id="save-status" class="editor-status" role="status"></p>
@@ -52,6 +55,13 @@ permalink: /write/
 <p id="delete-detail">A copy stays in your drafts. The public blog updates after deployment; the original also remains recoverable from GitHub history.</p>
 <div class="actions"><button id="confirm-delete" type="button">Delete from blog</button><button id="cancel-delete" type="button" autofocus>Cancel</button></div>
 </dialog>
+<dialog id="note-dialog" aria-labelledby="note-heading">
+<form id="note-form">
+<h2 id="note-heading">Add an explanation</h2>
+<label>Explanation<textarea id="note-text" rows="5" required></textarea></label>
+<p id="note-error" role="status"></p>
+<div class="actions"><button class="primary" type="submit">Save note</button><button id="note-cancel" type="button">Cancel</button><button id="note-remove" type="button" hidden>Remove note</button></div>
+</form></dialog>
 <dialog id="reference-dialog" aria-labelledby="reference-heading">
 <form id="reference-form" autocomplete="off">
 <h2 id="reference-heading">Add a reference</h2>

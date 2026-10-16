@@ -5,6 +5,7 @@
 <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
 <link rel="stylesheet" href="{{ '/assets/fonts.css' | relative_url }}?v={{ site.time | date: '%s' }}">
 <link rel="stylesheet" href="{{ '/styles.css' | relative_url }}?v={{ site.time | date: '%s' }}">
+<script src="{{ '/assets/links.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 </head><body>
 <a class="skip-link" href="#posts">Skip to posts</a>
 <div class="blog-shell">
@@ -12,7 +13,7 @@
 {% assign previous_date = '' %}{% for post in site.posts %}
 {% assign published = post.published_at | default: post.date %}{% assign post_day = published | date: '%Y-%m-%d' %}
 {% assign group_position = forloop.index0 | modulo: 3 %}{% if post_day != previous_date or group_position == 0 %}<time class="nav-date" datetime="{{ post_day }}">{{ published | date: '%-d %B %Y' }}</time>{% assign previous_date = post_day %}{% endif %}
-<a href="{% if page.home %}#{{ post.slug | escape }}{% else %}{{ post.url | relative_url }}{% endif %}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
+<a target="_blank" rel="noopener noreferrer" href="{{ post.url | relative_url }}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
 {% endfor %}</nav></aside>
 <main class="main" id="posts" tabindex="-1"><div class="reading-column">{{ content }}</div>
 </main>

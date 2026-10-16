@@ -4,7 +4,7 @@ home: true
 ---
 {% for post in site.posts %}
 <article class="post" id="{{ post.slug | escape }}">
-{% if forloop.first %}<h1>{% else %}<h2>{% endif %}<a class="post-title" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>{% if forloop.first %}</h1>{% else %}</h2>{% endif %}
+{% if forloop.first %}<h1>{% else %}<h2>{% endif %}<a class="post-title" target="_blank" rel="noopener noreferrer" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>{% if forloop.first %}</h1>{% else %}</h2>{% endif %}
 {% include post-time.html entry=post %}
 {% include quote.html entry=post %}
 <div class="post-body" data-post-preview id="preview-{{ post.slug | escape }}">{{ post.content }}</div>
