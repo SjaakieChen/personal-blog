@@ -20,13 +20,18 @@
     const source={};
     for(const field of ['title','url','author','details','savedUrl','note'])source[field]=text(data.source[field],field);
     if(!source.title || !safeURL(source.url) || (source.savedUrl && !safeURL(source.savedUrl)))throw new Error('The citation needs a title and a valid source URL.');
-    return {source,quote:text(data.quote,'quote'),locator:text(data.locator,'locator'),displayText:text(data.displayText,'display text')};
+    const displayStyle=data.displayStyle===undefined?'normal':data.displayStyle;
+    if(!['small','normal'].includes(displayStyle))throw new Error('Choose small or normal display text.');
+    return {source,quote:text(data.quote,'quote'),locator:text(data.locator,'locator'),displayText:text(data.displayText,'display text'),displayStyle};
   }
   const referenceKey = draft => 'ref-'+String(draft.referenceKey || draft.id).replace(/[^a-zA-Z0-9_-]/g,'');
-  function citation(id, references=[], key='preview', locator='', label='') {
+  function citation(id, references=[], key='preview', locator='', label='', labelStyle='normal') {
     const i=references.findIndex(r=>r.id===id);
     if(i<0) return '<sup class="citation missing-reference">[?]</sup>';
-    if(label) return '<span class="text-citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'" data-label="'+escapeHTML(label)+'"><a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(references[i].url))+'" title="'+escapeHTML(references[i].title+(locator?' — '+locator:''))+'">'+escapeHTML(label)+'</a></span>';
+    if(label) {
+      const small=labelStyle==='small', tag=small?'sup':'span';
+      return '<'+tag+' class="text-citation'+(small?' citation':'')+'" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'" data-label="'+escapeHTML(label)+'" data-label-style="'+(small?'small':'normal')+'"><a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(references[i].url))+'" title="'+escapeHTML(references[i].title+(locator?' — '+locator:''))+'">'+escapeHTML(label)+'</a></'+tag+'>';
+    }
     return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'" title="'+escapeHTML(locator)+'">['+(i+1)+']</a></sup>';
   }
   function renderReferences(references=[], key='preview') {
@@ -62,7 +67,7 @@
       if(run.bold) text='<strong>'+text+'</strong>';
       if(safeURL(run.link)) text='<a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(run.link)+'">'+text+'</a>';
       if(run.quoted) text='<q>'+text+'</q>';
-      if(run.reference) text+=citation(run.reference,references,key,run.locator || '',run.label || '');
+      if(run.reference) text+=citation(run.reference,references,key,run.locator || '',run.label || '',run.labelStyle || 'normal');
       if(run.note) text+=noteMarker(run.note,used,key);
       return text;
     }).join('')+'</p>').join('\n');

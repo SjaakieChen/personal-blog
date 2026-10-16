@@ -70,7 +70,10 @@ permalink: /write/
 <label>Insert as<select id="citation-placement"><option value="body-quote">Quote and reference in post</option><option value="body-reference">Reference only, after selected text</option><option value="body-link">Linked text (no number)</option><option value="opening-quote">Opening quote and reference</option></select></label>
 <label id="citation-quote-field">Quoted text<textarea id="citation-text" rows="3"></textarea></label>
 </div>
-<label id="reference-display-field">Display text (optional)<input id="reference-display-text" autocomplete="off" placeholder="Leave blank for a numbered citation"></label>
+<div id="reference-display-field">
+<label>Display text (optional)<input id="reference-display-text" autocomplete="off" placeholder="Leave blank for a numbered citation"></label>
+<label>Text size<select id="reference-display-style"><option value="normal">Normal text</option><option value="small">Small text (superscript)</option></select></label>
+</div>
 <label>Use a source<select id="reference-existing"><option value="">New source</option></select></label>
 <label>Your reference pages<select id="reference-page"><option value="">Choose a page (optional)</option></select></label>
 <label>Title<input id="reference-title" autocomplete="off" required></label>

@@ -11,6 +11,9 @@ test('named citations display the requested words and keep source links and meta
   const data={type:'blog-citation',version:1,source:references[0],displayText:'our collective reaction'};
   const parsed=parseCitation(data);
   assert.equal(parsed.displayText,'our collective reaction');assert.equal(parsed.quote,'');
+  assert.equal(parsed.displayStyle,'normal');
+  assert.equal(parseCitation({...data,displayStyle:'small'}).displayStyle,'small');
+  assert.throws(()=>parseCitation({...data,displayStyle:'huge'}),/small or normal/);
   assert.throws(()=>parseCitation({...data,displayText:{text:'invalid'}}),/display text/);
   const doc=[{runs:[{text:'',reference:'source-1',label:parsed.displayText,locator:'Section 2'}]}];
   const html=render(doc,references,'ref-example');
@@ -18,6 +21,10 @@ test('named citations display the requested words and keep source links and meta
   assert.match(html,/href="https:\/\/example.org\/paper.pdf"/);assert.match(html,/>our collective reaction<\/a>/);
   assert.match(html,/target="_blank" rel="noopener noreferrer"/);assert.ok(!html.includes('[1]'));assert.ok(!html.includes('<q>'));
   assert.match(prepare({...draft,doc,references}).content,/aria-label="References"/);
+  const small=render([{runs:[{text:'',reference:'source-1',label:'summary of our reaction',labelStyle:'small'}]}],references);
+  assert.match(small,/<sup class="text-citation citation"/);
+  assert.match(small,/data-label-style="small"/);
+  assert.match(small,/>summary of our reaction<\/a>/);
   const escaped=render([{runs:[{text:'',reference:'source-1',label:'<img src=x onerror=alert(1)>'}]}],references);
   assert.ok(!escaped.includes('<img'));assert.match(escaped,/&lt;img/);
 });

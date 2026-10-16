@@ -18,6 +18,7 @@ unknown author/date fields empty. Do not invent source metadata or saved-copy UR
   },
   "locator": "p. 12",
   "displayText": "",
+  "displayStyle": "normal",
   "quote": "Exact quoted text; omit if only inserting a reference."
 }
 ```
@@ -34,6 +35,8 @@ also appears in References. For example, `"displayText": "our collective reactio
 Leave `displayText` empty for the usual numbered citation. Importing at a text
 selection replaces that selection in linked-text mode; a numbered reference goes
 after it. Review the mode and text before inserting.
+Set `displayStyle` to `small` for superscript text, or `normal` for inline text.
+The citation dialog's **Text size** selector lets you change this before inserting.
 Quotation marks are never added. Source metadata and quoted text are stored with
 the draft and published post, but importing does not archive the linked webpage
 or PDF. Only set savedUrl when a saved copy actually exists.

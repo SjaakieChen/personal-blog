@@ -201,7 +201,7 @@
       if(node.dataset.note) {runs.push({text:'',note:node.dataset.note});return;}
       if(node.dataset.reference) {
         const citation={reference:node.dataset.reference,locator:node.dataset.locator || ''};
-        if(node.dataset.label) citation.label=node.dataset.label;
+        if(node.dataset.label){citation.label=node.dataset.label;citation.labelStyle=node.dataset.labelStyle==='small'?'small':'normal';}
         if(!citation.label && runs.at(-1)?.quoted) Object.assign(runs.at(-1),citation);
         else runs.push({text:'',...citation});
         return;
@@ -287,7 +287,7 @@
     e.preventDefault(); const html=e.clipboardData.getData('text/html'); let doc;
     if(html) {const template=document.createElement('template');template.innerHTML=html;doc=readDocument(template.content);}
     else doc=core.plainDocument(e.clipboardData.getData('text/plain'));
-    doc.forEach(b=>b.runs.forEach(r=>{if(r.label)r.text+=r.label;delete r.label;delete r.reference;delete r.locator;delete r.quoted;delete r.note;}));
+    doc.forEach(b=>b.runs.forEach(r=>{if(r.label)r.text+=r.label;delete r.label;delete r.labelStyle;delete r.reference;delete r.locator;delete r.quoted;delete r.note;}));
     document.execCommand('insertHTML',false,core.render(doc));changed();
   });
   $('body').addEventListener('drop',e=>e.preventDefault());
@@ -428,6 +428,7 @@
     importedCitation=true;$('imported-citation').hidden=false;
     $('citation-text').value=citation.quote;
     $('reference-display-text').value=citation.displayText;
+    $('reference-display-style').value=citation.displayStyle;
     $('citation-placement').value=target==='quote'?'opening-quote':citation.displayText?'body-link':!citation.quote || (referenceRange && !referenceRange.collapsed)?'body-reference':'body-quote';
     updateCitationFields();
     $('reference-quoted').parentElement.hidden=true;
@@ -477,7 +478,7 @@
       const quoted=!label && (importedCitation?placement==='body-quote':$('reference-quoted').checked);
       const text=importedCitation?importedQuote:quoted?selection.toString():'';
       if(!quoted && !label)selection.collapseToEnd();
-      const html=(quoted?'<q>'+core.escapeHTML(text)+'</q>':'')+core.citation(r.id,d.references,core.referenceKey(d),locator,label)+'&nbsp;';
+      const html=(quoted?'<q>'+core.escapeHTML(text)+'</q>':'')+core.citation(r.id,d.references,core.referenceKey(d),locator,label,$('reference-display-style').value)+'&nbsp;';
       // Chromium can move a non-editable fragment outside the paragraph during insertion.
       // Insert it inline first, then protect the citation from accidental text edits.
       document.execCommand('insertHTML',false,html.replace(' contenteditable="false"',''));
