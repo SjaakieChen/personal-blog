@@ -201,7 +201,8 @@
       if(node.dataset.note) {runs.push({text:'',note:node.dataset.note});return;}
       if(node.dataset.reference) {
         const citation={reference:node.dataset.reference,locator:node.dataset.locator || ''};
-        if(runs.at(-1)?.quoted) Object.assign(runs.at(-1),citation);
+        if(node.dataset.label) citation.label=node.dataset.label;
+        if(!citation.label && runs.at(-1)?.quoted) Object.assign(runs.at(-1),citation);
         else runs.push({text:'',...citation});
         return;
       }
@@ -286,7 +287,7 @@
     e.preventDefault(); const html=e.clipboardData.getData('text/html'); let doc;
     if(html) {const template=document.createElement('template');template.innerHTML=html;doc=readDocument(template.content);}
     else doc=core.plainDocument(e.clipboardData.getData('text/plain'));
-    doc.forEach(b=>b.runs.forEach(r=>{delete r.reference;delete r.locator;delete r.quoted;delete r.note;}));
+    doc.forEach(b=>b.runs.forEach(r=>{if(r.label)r.text+=r.label;delete r.label;delete r.reference;delete r.locator;delete r.quoted;delete r.note;}));
     document.execCommand('insertHTML',false,core.render(doc));changed();
   });
   $('body').addEventListener('drop',e=>e.preventDefault());
@@ -302,7 +303,7 @@
   document.querySelectorAll('[data-command]').forEach(button=>{
     button.addEventListener('mousedown',e=>e.preventDefault());
     button.addEventListener('click',()=>{
-      $('body').focus();
+      $('body').focus({preventScroll:true});
       if(selectionRange && $('body').contains(selectionRange.commonAncestorContainer)) {const s=window.getSelection();s.removeAllRanges();s.addRange(selectionRange);}
       document.execCommand(button.dataset.command,false,null);changed();
     });
@@ -320,14 +321,25 @@
   }
   $('publish').addEventListener('click',publishCurrent);
   $('connect-github').addEventListener('click',connectGitHub);
-  let referenceTarget='body', referenceRange=null, importedCitation=false;
-  let editingNote=null, noteRange=null;
+  function captureWriterView() {
+    return {draft:active,positions:[$('writing-main'),document.querySelector('.sidebar')].map(el=>({el,top:el.scrollTop,left:el.scrollLeft}))};
+  }
+  function restoreWriterView(view) {
+    const restore=()=>{if(view?.draft===active)for(const p of view.positions)p.el.scrollTo(p.left,p.top);};
+    restore();requestAnimationFrame(restore);
+  }
+  let referenceTarget='body', referenceRange=null, importedCitation=false, referenceView=null;
+  let editingNote=null, noteRange=null, noteView=null;
+  for(const id of ['add-reference','add-note','restore']) $(id).addEventListener('mousedown',event=>event.preventDefault());
+  $('reference-dialog').addEventListener('close',()=>restoreWriterView(referenceView));
+  $('note-dialog').addEventListener('close',()=>restoreWriterView(noteView));
   function openNote(id=null) {
+    noteView=captureWriterView();
     editingNote=id;noteRange=selectionRange?.cloneRange();
     $('note-heading').textContent=id?'Edit explanation':'Add an explanation';
     $('note-text').value=id?(current().notes || []).find(n=>n.id===id)?.text || '':'';
     $('note-error').textContent='';$('note-remove').hidden=!id;
-    $('note-dialog').showModal();$('note-text').focus();
+    $('note-dialog').showModal();$('note-text').focus();restoreWriterView(noteView);
   }
   $('add-note').addEventListener('click',()=>openNote());
   $('note-cancel').addEventListener('click',()=>$('note-dialog').close());
@@ -338,19 +350,20 @@
     if(editingNote){const note=d.notes.find(n=>n.id===editingNote);if(note)note.text=text;}
     else {
       const note={id:crypto.randomUUID(),text};d.notes.push(note);
-      $('note-dialog').close();$('body').focus();const selection=window.getSelection();
+      $('note-dialog').close();$('body').focus({preventScroll:true});const selection=window.getSelection();
       const range=noteRange && $('body').contains(noteRange.commonAncestorContainer)?noteRange:document.createRange();
       if(range!==noteRange)range.selectNodeContents($('body'));
       range.collapse(false);selection.removeAllRanges();selection.addRange(range);
-      document.execCommand('insertHTML',false,core.noteMarker(note.id,d.notes,core.referenceKey(d))+'&nbsp;');
+      document.execCommand('insertHTML',false,core.noteMarker(note.id,d.notes,core.referenceKey(d)).replace(' contenteditable="false"','')+'&nbsp;');
+      $('body').querySelectorAll('[data-note]').forEach(marker=>marker.contentEditable='false');
     }
-    $('note-dialog').close();changed();
+    $('note-dialog').close();changed();restoreWriterView(noteView);
   });
   $('note-remove').addEventListener('click',()=>{
     if(!editingNote)return;
     current().notes=(current().notes || []).filter(n=>n.id!==editingNote);
     $('body').querySelectorAll('[data-note]').forEach(marker=>{if(marker.dataset.note===editingNote)marker.remove();});
-    $('note-dialog').close();changed();
+    $('note-dialog').close();changed();restoreWriterView(noteView);
   });
   function renderNotePreview() {
     const d=current(), key=core.referenceKey(d), notes=core.usedNotes(d.doc,d.notes);
@@ -367,6 +380,10 @@
   function renderReferencePreview() {
     renderNotePreview();
     const d=current(), refs=d.references || [], key=core.referenceKey(d);
+    $('body').querySelectorAll('.text-citation[data-reference]').forEach(marker=>{
+      const source=refs.find(r=>r.id===marker.dataset.reference), link=marker.querySelector('a');
+      if(source && link){link.href=core.safeURL(source.url);link.title=source.title+(marker.dataset.locator?' — '+marker.dataset.locator:'');}
+    });
     $('reference-preview').innerHTML=core.renderReferences(refs,key);
     $('quote-source').hidden=!d.quote.trim();
     $('quote-block').hidden=false;
@@ -381,10 +398,12 @@
     for(const [field,name] of [['title','title'],['url','url'],['author','author'],['details','details'],['saved','savedUrl'],['note','note']]) $('reference-'+field).value=r[name] || '';
   }
   function openReference(target='body',id='') {
+    referenceView=captureWriterView();
     referenceTarget=target;referenceRange=selectionRange?.cloneRange();
     importedCitation=false;$('imported-citation').hidden=true;
     const d=current(), refs=d.references || [];
     $('reference-form').reset();$('reference-error').textContent='';
+    $('reference-display-field').hidden=target!=='body';
     $('reference-existing').replaceChildren(new Option('New source',''),...refs.map(r=>new Option(r.title,r.id)));
     $('reference-page').replaceChildren(new Option('Choose a page (optional)',''),...published.filter(p=>p.kind==='page').map(p=>new Option(p.title,p.url)));
     $('reference-existing').value=id || (target==='quote'?d.quoteReference || '':'');
@@ -394,23 +413,33 @@
     $('reference-quoted').disabled=!referenceRange || referenceRange.collapsed;
     $('reference-form').querySelector('[type=submit]').textContent=target==='edit'?'Save source':target==='quote'?'Use for quote':'Insert reference';
     $('reference-heading').textContent=target==='quote'?'Quote source':target==='edit'?'Edit source':'Add a reference';
-    $('reference-dialog').showModal();
+    $('reference-dialog').showModal();restoreWriterView(referenceView);
   }
   function importCitation(data) {
     const citation=core.parseCitation(data);
+    const originalView=$('reference-dialog').open?referenceView:captureWriterView();
     const target=$('reference-dialog').open && referenceTarget==='quote'?'quote':'body';
     if($('reference-dialog').open)$('reference-dialog').close();
     openReference(target);
+    referenceView=originalView;
     const existing=(current().references || []).find(r=>r.url===citation.source.url);
     $('reference-existing').value=existing?.id || '';
     fillReference(citation.source);$('reference-locator').value=citation.locator;
     importedCitation=true;$('imported-citation').hidden=false;
     $('citation-text').value=citation.quote;
-    $('citation-placement').value=target==='quote'?'opening-quote':!citation.quote || (referenceRange && !referenceRange.collapsed)?'body-reference':'body-quote';
+    $('reference-display-text').value=citation.displayText;
+    $('citation-placement').value=target==='quote'?'opening-quote':citation.displayText?'body-link':!citation.quote || (referenceRange && !referenceRange.collapsed)?'body-reference':'body-quote';
+    updateCitationFields();
     $('reference-quoted').parentElement.hidden=true;
     $('reference-heading').textContent='Review citation';
     $('reference-form').querySelector('[type=submit]').textContent='Insert citation';
   }
+  function updateCitationFields() {
+    const placement=$('citation-placement').value;
+    $('reference-display-field').hidden=placement!=='body-link';
+    $('citation-quote-field').hidden=!['body-quote','opening-quote'].includes(placement);
+  }
+  $('citation-placement').addEventListener('change',updateCitationFields);
   $('import-citation').addEventListener('click',()=>$('restore-file').click());
   $('add-reference').addEventListener('click',()=>openReference());
   $('cite-quote').addEventListener('click',()=>openReference('quote'));
@@ -427,7 +456,9 @@
     e.preventDefault();const d=current();
     const placement=importedCitation?$('citation-placement').value:null;
     const importedQuote=importedCitation?$('citation-text').value.trim():'';
-    if(importedCitation && placement!=='body-reference' && !importedQuote){$('reference-error').textContent='Add quoted text, or choose Reference only.';return;}
+    const label=(!importedCitation && referenceTarget==='body') || placement==='body-link'?$('reference-display-text').value.trim():'';
+    if(placement==='body-link' && !label){$('reference-error').textContent='Add the text to display for this link.';return;}
+    if(importedCitation && ['body-quote','opening-quote'].includes(placement) && !importedQuote){$('reference-error').textContent='Add quoted text, or choose Reference only.';return;}
     if(importedCitation)referenceTarget=placement==='opening-quote'?'quote':'body';
     const r={id:$('reference-existing').value || crypto.randomUUID()};
     for(const [field,name] of [['title','title'],['url','url'],['author','author'],['details','details'],['saved','savedUrl'],['note','note']]) r[name]=$('reference-'+field).value.trim();
@@ -440,16 +471,19 @@
     }
     $('reference-dialog').close();
     if(referenceTarget==='body') {
-      $('body').focus();const selection=window.getSelection();
+      $('body').focus({preventScroll:true});const selection=window.getSelection();
       if(referenceRange && $('body').contains(referenceRange.commonAncestorContainer)) {selection.removeAllRanges();selection.addRange(referenceRange);}
       else {const range=document.createRange();range.selectNodeContents($('body'));range.collapse(false);selection.removeAllRanges();selection.addRange(range);}
-      const quoted=importedCitation?placement==='body-quote':$('reference-quoted').checked;
+      const quoted=!label && (importedCitation?placement==='body-quote':$('reference-quoted').checked);
       const text=importedCitation?importedQuote:quoted?selection.toString():'';
-      if(!quoted)selection.collapseToEnd();
-      const html=(quoted?'<q>'+core.escapeHTML(text)+'</q>':'')+core.citation(r.id,d.references,core.referenceKey(d),locator)+'&nbsp;';
-      document.execCommand('insertHTML',false,html);
+      if(!quoted && !label)selection.collapseToEnd();
+      const html=(quoted?'<q>'+core.escapeHTML(text)+'</q>':'')+core.citation(r.id,d.references,core.referenceKey(d),locator,label)+'&nbsp;';
+      // Chromium can move a non-editable fragment outside the paragraph during insertion.
+      // Insert it inline first, then protect the citation from accidental text edits.
+      document.execCommand('insertHTML',false,html.replace(' contenteditable="false"',''));
+      $('body').querySelectorAll('[data-reference]').forEach(marker=>marker.contentEditable='false');
     }
-    changed();
+    changed();restoreWriterView(referenceView);
   });
   $('download').addEventListener('click',()=>{
     const blob=new Blob([JSON.stringify({version:2,drafts,active},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='blog-drafts-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);

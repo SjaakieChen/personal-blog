@@ -7,6 +7,21 @@ const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
 const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
 const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
 
+test('named citations display the requested words and keep source links and metadata',()=>{
+  const data={type:'blog-citation',version:1,source:references[0],displayText:'our collective reaction'};
+  const parsed=parseCitation(data);
+  assert.equal(parsed.displayText,'our collective reaction');assert.equal(parsed.quote,'');
+  assert.throws(()=>parseCitation({...data,displayText:{text:'invalid'}}),/display text/);
+  const doc=[{runs:[{text:'',reference:'source-1',label:parsed.displayText,locator:'Section 2'}]}];
+  const html=render(doc,references,'ref-example');
+  assert.match(html,/class="text-citation"/);assert.match(html,/data-label="our collective reaction"/);
+  assert.match(html,/href="https:\/\/example.org\/paper.pdf"/);assert.match(html,/>our collective reaction<\/a>/);
+  assert.match(html,/target="_blank" rel="noopener noreferrer"/);assert.ok(!html.includes('[1]'));assert.ok(!html.includes('<q>'));
+  assert.match(prepare({...draft,doc,references}).content,/aria-label="References"/);
+  const escaped=render([{runs:[{text:'',reference:'source-1',label:'<img src=x onerror=alert(1)>'}]}],references);
+  assert.ok(!escaped.includes('<img'));assert.match(escaped,/&lt;img/);
+});
+
 test('citation markers show only the number while preserving section details and targets',()=>{
   const {citation}=require('../assets/writer-core.js');
   const html=citation('source-1',references,'ref-test','Section: A long heading');

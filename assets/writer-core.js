@@ -3,7 +3,7 @@
   const escapeHTML = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const plainDocument = text => String(text).split(/\n\s*\n/).map(text=>({runs:[{text}]}));
   function validDocument(doc) {
-    return Array.isArray(doc) && doc.every(block=>block && Array.isArray(block.runs) && block.runs.every(run=>run && typeof run.text==='string'));
+    return Array.isArray(doc) && doc.every(block=>block && Array.isArray(block.runs) && block.runs.every(run=>run && typeof run.text==='string' && (run.label===undefined || typeof run.label==='string')));
   }
   function safeURL(value) {
     if(typeof value!=='string' || /[\s\\<>]/.test(value)) return '';
@@ -20,12 +20,13 @@
     const source={};
     for(const field of ['title','url','author','details','savedUrl','note'])source[field]=text(data.source[field],field);
     if(!source.title || !safeURL(source.url) || (source.savedUrl && !safeURL(source.savedUrl)))throw new Error('The citation needs a title and a valid source URL.');
-    return {source,quote:text(data.quote,'quote'),locator:text(data.locator,'locator')};
+    return {source,quote:text(data.quote,'quote'),locator:text(data.locator,'locator'),displayText:text(data.displayText,'display text')};
   }
   const referenceKey = draft => 'ref-'+String(draft.referenceKey || draft.id).replace(/[^a-zA-Z0-9_-]/g,'');
-  function citation(id, references=[], key='preview', locator='') {
+  function citation(id, references=[], key='preview', locator='', label='') {
     const i=references.findIndex(r=>r.id===id);
     if(i<0) return '<sup class="citation missing-reference">[?]</sup>';
+    if(label) return '<span class="text-citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'" data-label="'+escapeHTML(label)+'"><a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(references[i].url))+'" title="'+escapeHTML(references[i].title+(locator?' — '+locator:''))+'">'+escapeHTML(label)+'</a></span>';
     return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'" title="'+escapeHTML(locator)+'">['+(i+1)+']</a></sup>';
   }
   function renderReferences(references=[], key='preview') {
@@ -61,14 +62,14 @@
       if(run.bold) text='<strong>'+text+'</strong>';
       if(safeURL(run.link)) text='<a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(run.link)+'">'+text+'</a>';
       if(run.quoted) text='<q>'+text+'</q>';
-      if(run.reference) text+=citation(run.reference,references,key,run.locator || '');
+      if(run.reference) text+=citation(run.reference,references,key,run.locator || '',run.label || '');
       if(run.note) text+=noteMarker(run.note,used,key);
       return text;
     }).join('')+'</p>').join('\n');
   }
   function prepare(draft, now=new Date()) {
     const doc=draft.doc || plainDocument(draft.body || '');
-    if(!draft.title.trim() || !validDocument(doc) || !doc.some(b=>b.runs.some(r=>r.text.trim()))) throw new Error('Add a title and some writing first.');
+    if(!draft.title.trim() || !validDocument(doc) || !doc.some(b=>b.runs.some(r=>r.text.trim() || r.label?.trim()))) throw new Error('Add a title and some writing first.');
     if(!['post','page'].includes(draft.kind)) throw new Error('Choose a post or a page.');
     const references=draft.references || [];
     const notes=draft.notes || [];
