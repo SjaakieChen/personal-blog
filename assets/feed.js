@@ -14,8 +14,13 @@
     }
     function measure() {if(expanded)return;body.classList.remove('post-collapsed');const long=body.scrollHeight>620;button.hidden=!long;if(long)collapse();}
     button.addEventListener('click',()=>{if(expanded){collapse();body.closest('article').scrollIntoView({block:'start'});}else expand();});
-    // A citation can target a reference below the collapsed preview.
-    body.closest('article').addEventListener('click',e=>{const a=e.target.closest('a');if(a?.target!=='_blank' && a?.getAttribute('href')?.startsWith('#ref-'))expand();});
+    // Reveal any destination hidden in this preview before the browser jumps to it.
+    document.addEventListener('click',e=>{
+      const a=e.target.closest('a');
+      if(!a?.hash || !window.BlogLinks?.samePage(a))return;
+      let id;try{id=decodeURIComponent(a.hash.slice(1));}catch{return;}
+      if(body.contains(document.getElementById(id)))expand();
+    });
     function revealHash(){if(location.hash && Array.from(body.querySelectorAll('[id]')).some(el=>'#'+el.id===location.hash))expand();}
     measure();revealHash();window.addEventListener('hashchange',revealHash);
     let width=body.clientWidth;new ResizeObserver(()=>{if(body.clientWidth!==width){width=body.clientWidth;expand();expanded=false;measure();}}).observe(body);

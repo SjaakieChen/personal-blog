@@ -32,7 +32,7 @@
       const small=labelStyle==='small', tag=small?'sup':'span';
       return '<'+tag+' class="text-citation'+(small?' citation':'')+'" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'" data-label="'+escapeHTML(label)+'" data-label-style="'+(small?'small':'normal')+'"><a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(references[i].url))+'" title="'+escapeHTML(references[i].title+(locator?' — '+locator:''))+'">'+escapeHTML(label)+'</a></'+tag+'>';
     }
-    return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a target="_blank" rel="noopener noreferrer" href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'" title="'+escapeHTML(locator)+'">['+(i+1)+']</a></sup>';
+    return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'" title="'+escapeHTML(locator)+'">['+(i+1)+']</a></sup>';
   }
   function renderReferences(references=[], key='preview') {
     if(!references.length)return '';

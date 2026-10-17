@@ -74,15 +74,16 @@ test('explanation notes follow text order, remain separate from sources, and esc
   assert.throws(()=>prepare({...draft,notes:[notes[0],notes[0]]}),/unique ID/);
 });
 
-test('links and citations open separately but explanation markers stay on the same page',()=>{
+test('source links open separately while citation and explanation anchors stay on the page',()=>{
   const notes=[{id:'note',text:'Explanation'}];
   const doc=[{runs:[{text:'Linked sentence',link:'/reference-page/',reference:'source-1',note:'note'}]}];
   const prepared=prepare({...draft,doc,references,notes});
   const links=prepared.content.match(/<a\b[^>]*>/g);
   assert.equal(links.length,5);
-  const note=links.find(a=>a.includes('-note-'));
-  assert.doesNotMatch(note,/target=/);
-  links.filter(a=>a!==note).forEach(a=>{assert.match(a,/target="_blank"/);assert.match(a,/rel="noopener noreferrer"/);});
+  const anchors=links.filter(a=>a.includes('href="#'));
+  assert.equal(anchors.length,2);
+  anchors.forEach(a=>assert.doesNotMatch(a,/target=/));
+  links.filter(a=>!anchors.includes(a)).forEach(a=>{assert.match(a,/target="_blank"/);assert.match(a,/rel="noopener noreferrer"/);});
 });
 
 test('citation JSON validates schema and URLs and preserves the quoted text',()=>{
