@@ -32,7 +32,8 @@
   const isPrivate=document.body.dataset.privateDesk==='true';
   let publishing=false, authPolling=false, pendingPublishId=null;
   const cloudBaseKey=syncKey+'-yoga-base';
-  let cloudBase={drafts:[],deleted:[]}, cloudSynced='', syncTimer, syncing=false, syncError='', githubHealthy=false;
+  let cloudBase={drafts:[],deleted:[]}, cloudSynced='', syncTimer, syncDue=0, syncing=false, syncAgain=false, syncFailures=0, syncError='', githubHealthy=false;
+  const syncTimeout=45000;
   try{cloudBase=JSON.parse(localStorage.getItem(cloudBaseKey)) || cloudBase;}catch{}
   const draftSnapshot=()=>({drafts,deleted:[...deletedDrafts]});
   function paintSync() {
@@ -41,22 +42,34 @@
     const clean=cloudSynced===JSON.stringify(draftSnapshot());
     const good=clean && githubHealthy && !syncing && !syncError && !saveFailed && navigator.onLine;
     button.dataset.connected=String(good);button.dataset.syncing=String(syncing || (!syncError && !clean && navigator.onLine));
-    const label=good?'Drafts synced to Yoga; GitHub checked. Click to sync again.':syncError?syncError+' Click to retry sync.':syncing?'Syncing drafts with Yoga…':!navigator.onLine?'Offline. Drafts saved on this device. Click to retry sync.':'Changes waiting to sync with Yoga.';
+    const label=good?'Drafts synced to Yoga; GitHub checked. Click to sync again.':!navigator.onLine?'Offline. Drafts saved on this device. Sync resumes automatically when online.':syncError?syncError+' Retrying automatically. Click to retry now.':syncing?'Syncing drafts with Yoga…':'Changes waiting to sync with Yoga.';
     button.title=label;button.setAttribute('aria-label',label);
+  }
+  function queueSync(delay) {
+    if(!navigator.onLine)return;
+    const due=Date.now()+delay;
+    // A later save must not postpone a retry that is already waiting.
+    if(syncTimer && syncDue<=due)return;
+    clearTimeout(syncTimer);syncDue=due;
+    syncTimer=setTimeout(()=>{syncTimer=null;syncDesk();},delay);
   }
   function scheduleSync() {
     if(!isPrivate)return;
-    paintSync();clearTimeout(syncTimer);
-    if(!syncing && cloudSynced!==JSON.stringify(draftSnapshot()))syncTimer=setTimeout(syncDesk,800);
+    paintSync();
+    if(syncing)return;
+    if(syncError)queueSync(Math.min(30000,2000*2**Math.min(Math.max(syncFailures-1,0),4)));
+    else if(!githubHealthy || cloudSynced!==JSON.stringify(draftSnapshot()))queueSync(800);
   }
   async function syncDesk() {
     if(!isPrivate){handoff(false);return;}
-    if(syncing)return;
-    clearTimeout(syncTimer);syncing=true;syncError='';paintSync();
+    if(syncing){syncAgain=true;return;}
+    clearTimeout(syncTimer);syncTimer=null;
+    if(!navigator.onLine){paintSync();return;}
+    syncing=true;syncError='';paintSync();
     try {
       if(!await save())throw new Error('Local saving failed. Use Save JSON.');
       for(let attempt=0;attempt<4;attempt++) {
-        const remote=await api('/api/drafts');
+        const remote=await api('/api/drafts',undefined,syncTimeout);
         if(!Array.isArray(remote.drafts) || !remote.drafts.every(acceptDraft) || !Array.isArray(remote.deleted))throw new Error('Invalid saved drafts on Yoga.');
         let outgoing;
         await navigator.locks.request(syncKey,()=>{
@@ -84,28 +97,39 @@
           if(!sync.same(before,current())){load();restoreWriterView(view);}else renderNav();
         });
         try {
-          const saved=await api('/api/drafts',{revision:remote.revision,...outgoing});
+          const saved=await api('/api/drafts',{revision:remote.revision,...outgoing},syncTimeout);
           cloudBase={drafts:saved.drafts,deleted:saved.deleted};
           localStorage.setItem(cloudBaseKey,JSON.stringify(cloudBase));cloudSynced=JSON.stringify(cloudBase);
           break;
         }catch(error){if(error.status!==409 || attempt===3)throw error;}
       }
-      const [session,indexOK]=await Promise.all([api('/api/session?fresh=1'),refreshIndex()]);
+      const [session,indexOK]=await Promise.all([api('/api/session?fresh=1',undefined,syncTimeout),refreshIndex()]);
       githubHealthy=session.connected && indexOK;
       if(!githubHealthy)throw new Error('Drafts saved on Yoga; GitHub could not be verified. Publish will offer sign-in if needed.');
+      syncFailures=0;
       if(cloudSynced===JSON.stringify(draftSnapshot()))$('save-status').textContent='Saved on this device and synced to Yoga';
-    }catch(error){syncError=error.message || 'Sync failed. Drafts remain saved on this device.';}
-    finally{syncing=false;paintSync();if(!syncError && cloudSynced!==JSON.stringify(draftSnapshot()))scheduleSync();}
+    }catch(error){syncFailures++;syncError=error.message || 'Sync failed. Drafts remain saved on this device.';}
+    finally{
+      syncing=false;paintSync();
+      if(syncAgain){syncAgain=false;queueSync(0);}else scheduleSync();
+    }
   }
   const removedPaths=new Set();
   function connectionStatus(connected) {
     githubHealthy=connected;paintSync();
   }
-  async function api(path,body) {
-    const response=await fetch(path,{cache:'no-store',...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
-    const data=await response.json();
-    if(!response.ok){const error=new Error(data.error || 'The server could not complete the request.');error.status=response.status;throw error;}
-    return data;
+  async function api(path,body,timeout=0) {
+    const controller=timeout?new AbortController():null;
+    const timer=controller?setTimeout(()=>controller.abort(),timeout):null;
+    try{
+      const response=await fetch(path,{cache:'no-store',...(controller?{signal:controller.signal}:{}),...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
+      const data=await response.json();
+      if(!response.ok){const error=new Error(data.error || 'The server could not complete the request.');error.status=response.status;throw error;}
+      return data;
+    }catch(error){
+      if(controller?.signal.aborted)throw new Error('Sync request timed out. Drafts remain saved on this device.');
+      throw error;
+    }finally{clearTimeout(timer);}
   }
   function publicationStatus(text,heading='Publish') {
     $('publish-panel').hidden=false;$('publish-heading').textContent=heading;$('publication-status').textContent=text;
@@ -725,9 +749,12 @@
       saveFailed=false;renderNav();if(await save())$('index-status').textContent='JSON imported. Existing drafts kept.';
     }catch(e){($('reference-dialog').open?$('reference-error'):$('index-status')).textContent=e.message;}finally{$('restore-file').value='';}
   });
-  let indexRequest=0;
-  function refreshIndex(){const request=++indexRequest;return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
-    if(request!==indexRequest)return;
+  let indexRequest=0, indexFlight=null;
+  function refreshIndex(){
+    if(indexFlight?.request===indexRequest)return indexFlight.promise;
+    const request=++indexRequest;
+    const promise=api(document.body.dataset.index,undefined,syncTimeout).then(data=>{
+    if(request!==indexRequest)return refreshIndex();
     published=[...new Map([...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path)).map(p=>[p.path,p])).values()].sort(newestFirst('publishedAt'));
     const reconciled=reconcilePublished();renderNav();updateDeleteButton();
     if(previewPath) {
@@ -744,14 +771,21 @@
     }
     else if(reconciled)save();
     $('index-status').textContent='';return true;
-  }).catch(()=>{if(request===indexRequest)$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';return false;});}
-  load();save();refreshIndex();
+  }).catch(()=>{
+    if(request!==indexRequest)return refreshIndex();
+    $('index-status').textContent='Published posts could not load. Your saved drafts are still available.';return false;
+  }).finally(()=>{if(indexFlight?.request===request)indexFlight=null;});
+    indexFlight={request,promise};return promise;
+  }
+  load();save();if(!isPrivate)refreshIndex();
   if(location.hash)requestAnimationFrame(()=>document.getElementById(location.hash.slice(1))?.scrollIntoView({block:'center'}));
   if(isPrivate) {
-    syncDesk();setInterval(()=>{if(!document.hidden)syncDesk();else {cloudSynced='';paintSync();}},30000);
-    window.addEventListener('focus',()=>{save();syncDesk();});
+    syncDesk();setInterval(()=>{if(!document.hidden && !syncing && !syncTimer)syncDesk();},30000);
+    window.addEventListener('focus',syncDesk);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncDesk();});
+    window.addEventListener('pageshow',event=>{if(event.persisted)syncDesk();});
     window.addEventListener('online',syncDesk);
-    window.addEventListener('offline',()=>{syncError='Offline. Drafts remain saved on this device.';paintSync();});
+    window.addEventListener('offline',()=>{clearTimeout(syncTimer);syncTimer=null;paintSync();});
     if(window.opener && new URLSearchParams(location.search).has('import')) {
       const receive=async event=>{
         if(event.origin!=='https://sjaakiechen.github.io' || event.source!==window.opener || event.data?.type!=='blog-desk-import')return;
