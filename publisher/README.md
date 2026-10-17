@@ -31,4 +31,8 @@ The toolbar dot is green only after the current draft collection has been acknow
 
 Tests: `python -m unittest discover -s scripts -p 'test_*.py'` and `node --test scripts/writer.test.cjs`.
 
+The sidebar shows Drafts, Edits and Published as separate states, with one entry per post. Cached published records remain in the synced collection to preserve identity and conflict checks, but do not appear as drafts. Content changes move a published record into Edits; successful publication moves it back. Discard edits leaves the live post intact. Older unlinked copies are associated with an existing publication by target path or matching type/title, preserving all writing. The publication response updates the current synced record, preserving edits made while the request was in flight.
+
+`node scripts/writer-lifecycle.browser.cjs` exercises the state transitions, reload, sync, discard, in-flight edits and continuous feed navigation against a local fake publisher. It needs Playwright with Microsoft Edge installed; `PLAYWRIGHT_MODULE` can point to an existing Playwright module.
+
 Select a published post in the writing sidebar, then Delete post to remove it from the public blog after confirmation. Matching local draft copies are removed too; Git history preserves the removed version. Deletion checks the original file revision and rejects concurrent changes. The sync status control is a green/amber/red dot with an accessible label; click it to sync again. Both timelines show newest publications first; draft order uses creation dates. Links to the current page (including numbered citations and asterisk explanations) jump within it; links to another page or website open in a new tab. Collapsed post previews expand before jumping to a hidden destination.

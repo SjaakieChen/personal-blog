@@ -166,13 +166,14 @@
     let publishingDraft;
     try {
       changed();if(titleConflict)throw new Error(titleConflict);
-      const d=current();publishingDraft=d;core.prepare(d);
+      let d=current();publishingDraft=d;core.prepare(d);
       if(!isPrivate){handoff(true);return;}
       publishing=true;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
       const session=await api('/api/session');
       connectionStatus(session.connected);
       if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
       await refreshIndex();
+      d=drafts.find(item=>item.id===d.id) || d;publishingDraft=d;
       const titleKey=value=>value.normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();
       if(published.some(p=>p.kind===d.kind && p.path!==d.sourcePath && p.path!==d.targetPath && titleKey(p.title)===titleKey(d.title)))throw new Error('A '+(d.kind==='page'?'reference page':'post')+' with this title already exists. Open it to edit, or choose a different title.');
       // Keep the exact request for a safe retry if the response is lost.
@@ -184,25 +185,35 @@
       save();publicationStatus('Sending “'+d.title+'” to GitHub…');
       const prepared=d.pendingPublication;
       const publishedWriting=writingFingerprint(d);
+      const submitted=structuredClone(d);
       const originalDate=d.kind==='post'?JSON.parse(prepared.content.match(/^date: (.+)$/m)[1]):null;
       const permalink=d.kind==='page'?JSON.parse(prepared.content.match(/^permalink: (.+)$/m)[1]):null;
       const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:d.sourceSha || null});
-      const wasPublished=!!d.sourcePath;
-      d.sourcePath=prepared.path;d.sourceSha=result.sha;
+      const wasPublished=!!submitted.sourcePath;
+      const live=drafts.find(item=>item.id===submitted.id);
+      const publication={sourcePath:prepared.path,sourceSha:result.sha,publishedFingerprint:publishedWriting};
       removedPaths.delete(prepared.path);
-      if(d.kind==='post')d.originalDate=originalDate;
-      else d.permalink=permalink;
-      if(!result.unchanged){if(wasPublished)d.editedAt=result.time;else d.publishedAt=result.time;}
-      d.publishedFingerprint=publishedWriting;
-      delete d.pendingPublication;save();refreshIndex();renderNav();if(current()===d){timestamp(d);$('kind').disabled=true;updateDeleteButton();}
+      if(submitted.kind==='post')publication.originalDate=originalDate;
+      else publication.permalink=permalink;
+      if(!result.unchanged){if(wasPublished)publication.editedAt=result.time;else publication.publishedAt=result.time;}
+      // Sync may replace draft objects while GitHub is responding. Update the live
+      // record, retaining anything typed after the submitted version was captured.
+      if(live){Object.assign(live,publication);delete live.pendingPublication;}
+      const saved={...submitted,...publication};
+      const entry={...saved,path:prepared.path,date:originalDate,html:core.render(saved.doc,core.usedReferences(saved),core.referenceKey(saved),saved.notes),references:core.usedReferences(saved),notes:core.usedNotes(saved.doc,saved.notes),referenceKey:saved.referenceKey || saved.id};
+      published=[entry,...published.filter(p=>p.path!==entry.path)];indexRequest++;
+      await save();refreshIndex();renderNav();if(current()?.id===submitted.id){timestamp(current());$('kind').disabled=true;updateDeleteButton();}
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
-      $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(d.kind==='page'?d.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
+      $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(saved.kind==='page'?saved.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
       publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
-      if(result.commit)watchDeployment(result.commit,d.title);
-    }catch(error){if(error.status===409 && publishingDraft){publishingDraft.conflict=true;save();refreshIndex();}publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
+      if(result.commit)watchDeployment(result.commit,submitted.title);
+    }catch(error){if(error.status===409 && publishingDraft){const live=drafts.find(d=>d.id===publishingDraft.id);if(live)live.conflict=true;save();refreshIndex();}publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
     finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';updateDeleteButton();}
   }
   function updateDeleteButton() {
+    const state=writingState(current());
+    $('delete-draft').hidden=state==='published';
+    $('delete-draft').textContent=state==='edit'?'Discard edits':'Delete draft';
     $('delete-draft').disabled=publishing;
     $('delete-post').hidden=!isPrivate || !current().sourcePath;
     $('delete-post').disabled=publishing || !current().sourceSha;
@@ -211,11 +222,11 @@
   let deletionTarget=null;
   $('delete-draft').addEventListener('click',()=>{
     if(publishing)return;
-    changed();const d=current();deletionTarget={id:d.id,draftOnly:true};
-    $('delete-heading').textContent='Delete draft?';
-    $('delete-description').textContent='Delete “'+(d.title || 'Untitled draft')+'” from this device?';
-    $('delete-detail').textContent='This removes the local draft and any unpublished edits. A published version, if any, stays on the blog.';
-    $('confirm-delete').textContent='Delete draft';
+    changed();const d=current(),editing=writingState(d)==='edit';deletionTarget={id:d.id,draftOnly:true,sourcePath:d.sourcePath};
+    $('delete-heading').textContent=editing?'Discard unpublished edits?':'Delete draft?';
+    $('delete-description').textContent=(editing?'Discard changes to “':'Delete “')+(d.title || 'Untitled draft')+'”?';
+    $('delete-detail').textContent=editing?'The published version stays on the blog. These unpublished changes will be removed from your synced writing desk.':'This removes the draft from your synced writing desk.';
+    $('confirm-delete').textContent=editing?'Discard edits':'Delete draft';
     $('delete-dialog').showModal();
   });
   $('delete-post').addEventListener('click',()=>{
@@ -239,7 +250,9 @@
         return;
       }
       if(pendingPublishId===target.id)pendingPublishId=null;
-      load();$('save-status').textContent='Draft deleted from this device.';
+      const entry=published.find(p=>p.path===target.sourcePath);
+      if(entry)openPublished(entry);else load();
+      $('save-status').textContent=entry?'Unpublished edits discarded.':'Draft deleted.';
       return;
     }
     publishing=true;$('publish').disabled=true;updateDeleteButton();$('view-published').hidden=true;
@@ -320,8 +333,29 @@
     return saveQueue;
   }
   window.addEventListener('storage',event=>{if(event.key===syncKey && event.newValue)save();});
-  function writingFingerprint(d){return JSON.stringify([d.kind,d.title,d.quote || '',core.render(d.doc || core.plainDocument(d.body || ''),core.usedReferences(d),'comparison',d.notes),core.usedReferences(d),d.quoteReference || '',d.quoteLocator || '',d.notes || []]);}
+  function writingFingerprint(d){return JSON.stringify([d.kind,d.title.trim(),(d.quote || '').trim(),core.render(d.doc || core.plainDocument(d.body || ''),core.usedReferences(d),'comparison',d.notes),core.usedReferences(d),d.quote?.trim()?d.quoteReference || '':'',d.quote?.trim()?d.quoteLocator || '':'',core.usedNotes(d.doc || core.plainDocument(d.body || ''),d.notes)]);}
   function entryDraft(entry){const template=document.createElement('template');template.innerHTML=entry.html;return {...entry,doc:readDocument(template.content),quote:entry.quote || '',references:entry.references || [],notes:entry.notes || []};}
+  function writingState(d) {
+    if(!d?.sourcePath)return 'draft';
+    const entry=published.find(p=>p.path===d.sourcePath), fingerprint=writingFingerprint(d);
+    return fingerprint===(entry && writingFingerprint(entryDraft(entry))) || fingerprint===d.publishedFingerprint?'published':'edit';
+  }
+  function reconcilePublished() {
+    let changed=false;
+    for(const d of drafts) {
+      const entry=published.find(p=>p.path===(d.sourcePath || d.targetPath)) || (!d.sourcePath && published.find(p=>p.kind===d.kind && sync.titleKey(p.title)===sync.titleKey(d.title)));
+      if(!entry)continue;
+      const fingerprint=writingFingerprint(entryDraft(entry));
+      const metadata={};
+      if(!d.sourcePath){Object.assign(metadata,{sourcePath:entry.path,sourceSha:entry.sourceSha,referenceKey:d.referenceKey || entry.referenceKey,publishedFingerprint:fingerprint,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});}
+      if(!d.publishedFingerprint || writingFingerprint(d)===fingerprint) {
+        metadata.publishedFingerprint=fingerprint;
+        if(writingFingerprint(d)===fingerprint)Object.assign(metadata,{sourceSha:entry.sourceSha,publishedAt:entry.publishedAt,editedAt:entry.editedAt});
+      }
+      for(const [key,value] of Object.entries(metadata))if(value!==undefined && d[key]!==value){d[key]=value;changed=true;}
+    }
+    return changed;
+  }
   const newestFirst=field=>(a,b)=>(Date.parse(b[field] || b.date) || 0)-(Date.parse(a[field] || a.date) || 0) || String(a.path || a.id).localeCompare(String(b.path || b.id));
   function renderNav() {
     const nav=$('writing-nav'),sidebar=document.querySelector('.sidebar'),scroll=sidebar.scrollTop; nav.replaceChildren();
@@ -332,20 +366,17 @@
       if(label) {const small=document.createElement('span');small.className='draft-label';small.textContent=label;b.append(small);}
       b.addEventListener('click',click);nav.append(b);
     }
-    heading('Drafts');
-    const seen=new Set();
-    [...drafts].sort(newestFirst('createdAt')).forEach(d=>{
-      const entry=published.find(p=>p.path===d.sourcePath);
-      const fingerprint=writingFingerprint(d), identity=(d.sourcePath || d.id)+fingerprint;
-      if(entry)return;
-      if(seen.has(identity))return;seen.add(identity);
-      item(d.title,d.id,()=>{active=d.id;load();save();},d.kind==='page'?'Reference page'+(d.sourcePath?' · Unpublished edits':' · Draft'):d.sourcePath?'Unpublished edits':null);
-    });
-    if(published.length) heading('Published');
+    for(const [state,label,field] of [['draft','Drafts','createdAt'],['edit','Edits','updatedAt']]) {
+      heading(label);
+      [...drafts].filter(d=>writingState(d)===state).sort(newestFirst(field)).forEach(d=>{
+        item(d.title,d.id,()=>{active=d.id;load();save();},d.kind==='page'?'Reference page':null);
+      });
+    }
+    heading('Published');
     [...published].sort(newestFirst('publishedAt')).forEach(entry=>{
       const draft=drafts.find(d=>d.sourcePath===entry.path);
-      const edited=draft && writingFingerprint(draft)!==(draft.publishedFingerprint || writingFingerprint(entryDraft(entry)));
-      item(entry.title,draft?.id || entry.path,()=>openPublished(entry),edited?'Unpublished edits':entry.kind==='page'?'Reference page':null);
+      if(draft && writingState(draft)==='edit')return;
+      item(entry.title,draft?.id || entry.path,()=>openPublished(entry),entry.kind==='page'?'Reference page':null);
     });
     sidebar.scrollTop=scroll;
   }
@@ -374,7 +405,7 @@
     if(!titleConflict){d.title=title;d.kind=kind;}
     $('title').setAttribute('aria-invalid',String(!!titleConflict));
     d.quote=$('quote').textContent;d.doc=readDocument($('body'));d.updatedAt=new Date().toISOString();
-    $('publish-panel').hidden=true;empties();renderNav();renderReferencePreview();save();
+    $('publish-panel').hidden=true;empties();renderNav();renderReferencePreview();updateDeleteButton();save();
   }
   function resetTypingFormat() {
     // At the new caret position, change typing state without touching the previous line.
@@ -675,14 +706,16 @@
   let indexRequest=0;
   function refreshIndex(){const request=++indexRequest;return fetch(document.body.dataset.index,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
     if(request!==indexRequest)return;
-    published=[...new Map([...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path)).map(p=>[p.path,p])).values()].sort(newestFirst('publishedAt'));renderNav();
+    published=[...new Map([...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path)).map(p=>[p.path,p])).values()].sort(newestFirst('publishedAt'));
+    const reconciled=reconcilePublished();renderNav();updateDeleteButton();
     if(isPrivate){
       let cleanup=false;
       for(const d of drafts)if(d.sourcePath && d.publishedFingerprint===writingFingerprint(d) && !published.some(p=>p.path===d.sourcePath)){
         deletedDrafts.add(d.id);cleanup=true;
       }
-      if(cleanup)save();
+      if(cleanup || reconciled)save();
     }
+    else if(reconciled)save();
     $('index-status').textContent='';return true;
   }).catch(()=>{if(request===indexRequest)$('index-status').textContent='Published posts could not load. Your saved drafts are still available.';return false;});}
   load();save();refreshIndex();

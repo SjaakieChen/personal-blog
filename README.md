@@ -9,13 +9,13 @@ The earlier public editor at https://sjaakiechen.github.io/personal-blog/write/ 
 
 Write directly in the page: click the title or body. The editor uses the same stylesheet, font files, reading width, weights, sizes, paragraph spacing, and colours as the published blog. The optional opening quote is always editable below the title. Select body text and use B, I, or U, or the usual Ctrl+B / Ctrl+I / Ctrl+U shortcuts. Supported rich formatting is paragraphs, line breaks, bold, italic, and underline.
 
-Drafts and published posts are in the editor sidebar. Selecting a published post opens a local working draft; the live version changes only when committed through GitHub. New draft preserves earlier work. No date/time input is needed. Publication and last-edit timestamps come from Git automatically; template-only updates do not change them.
+The editor sidebar separates Drafts (never published), Edits (unpublished changes to a live post), and Published. Opening a published post keeps it under Published until its content changes. Publishing moves the working copy to Published; text typed while a publication is in flight stays under Edits. Each post appears once. Discard edits restores the published version without deleting it. New draft preserves earlier work. Publication and last-edit timestamps come from Git automatically; template-only updates do not change them.
 
 Publish sends the post directly through the private Yoga service to GitHub and reports the Pages deployment status. Connect GitHub is a one-time device sign-in; the credential stays on Yoga. The private desk requires the owner’s Tailscale connection. Posts receive their own URLs; Reference page creates supporting material outside the dated feed. See publisher/README.md for operations, security boundaries, and restart details.
 
 ## Draft persistence
 
-Every edit saves synchronously in localStorage, and Saved appears only after a successful write. Drafts survive normal tab/browser closure and computer restarts in the same browser profile. A previous-state backup is retained locally. Clearing site data, private browsing, profile deletion, disk failure, and switching devices can remove or separate these drafts. They are not cloud-synced.
+Edits autosave in localStorage and sync to Yoga from the private desk. Drafts survive normal tab/browser closure and computer restarts. A previous-state backup is retained locally and on Yoga. The public transfer page stores drafts only in that browser; clearing its site data can remove them. Save JSON provides an independent backup.
 
 Save JSON downloads all drafts, including formatting, as JSON. Import JSON merges them without replacing existing drafts. Keep a backup outside the browser for important writing. The editor preserves older plain-text drafts when upgrading them to rich text.
 
@@ -40,5 +40,7 @@ Posts are the writing feed. Reference pages are supporting material, linked from
 Sources appear as numbered inline citations and a References list, using the same fonts and layout in the editor and published page. Edit source changes the shared source entry. References, quote attribution and formatted citations are included in local drafts and JSON backups, and in published metadata so they can be reopened for editing. New reference page creates a supporting-page draft; publish it before selecting it from another post. PDF links and saved-copy links do not upload or archive a document automatically.
 
 The home feed collapses long posts with Show more / Show less; individual post pages always show the complete article. Clicking a citation expands a collapsed article before following its reference target. Without JavaScript, the full text is available.
+
+The main blog is a continuous feed, newest first. Sidebar links jump to a post in that feed in the same tab, including when starting from a standalone post URL. Post titles in the feed remain within that document. References to other pages and external sources still open separately.
 
 Select a published post in the writing sidebar, then Delete post to remove it from the public blog after confirmation. A local draft copy stays available, and Git history preserves the removed version. Deletion checks the original file revision and rejects concurrent changes. The GitHub status control is a green/red dot with an accessible label; click it to inspect or connect.

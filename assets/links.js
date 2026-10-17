@@ -14,7 +14,8 @@
         const label='['+match[1]+']';if(link.textContent!==label)link.textContent=label;
       }
     }
-    if(samePage(link))link.removeAttribute('target');
+    const feedNavigation=link.hasAttribute('data-feed-navigation') && new URL(link.href,location.href).origin===location.origin;
+    if(samePage(link) || feedNavigation)link.removeAttribute('target');
     else {link.target='_blank';link.rel=[...new Set([...link.relList,'noopener','noreferrer'])].join(' ');}
   }
   function scan(root) {

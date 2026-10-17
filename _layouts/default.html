@@ -13,7 +13,7 @@
 {% assign newest_posts = site.posts | sort: 'published_at' | reverse %}{% assign previous_date = '' %}{% for post in newest_posts %}
 {% assign published = post.published_at | default: post.date %}{% assign post_day = published | date: '%Y-%m-%d' %}
 {% assign group_position = forloop.index0 | modulo: 3 %}{% if post_day != previous_date or group_position == 0 %}<time class="nav-date" datetime="{{ post_day }}">{{ published | date: '%-d %B %Y' }}</time>{% assign previous_date = post_day %}{% endif %}
-<a target="_blank" rel="noopener noreferrer" href="{{ post.url | relative_url }}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
+<a data-feed-navigation href="{% unless page.home %}{{ '/' | relative_url }}{% endunless %}#{{ post.slug | escape }}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
 {% endfor %}</nav></aside>
 <main class="main" id="posts" tabindex="-1"><div class="reading-column">{{ content }}</div>
 </main>
