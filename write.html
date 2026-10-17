@@ -27,6 +27,7 @@ permalink: /write/
 <button id="add-note" type="button">* Note</button>
 <select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Reference page</option></select>
 <button id="publish" class="primary" type="button">Publish</button>
+<button id="resume-edits" type="button" hidden>Resume edits</button>
 <button id="delete-post" type="button" hidden>Delete post</button>
 <button id="delete-draft" type="button">Delete draft</button>
 <button id="connect-github" class="connection-dot" data-connected="false" type="button" aria-label="Open private writing desk" title="Open private writing desk"></button>
@@ -34,6 +35,7 @@ permalink: /write/
 <button id="restore" type="button">Import JSON</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
 </div>
 <div class="reading-column">
+<p id="published-version" class="editor-status" hidden>Published version</p>
 <article class="post" aria-label="Editable post preview">
 <h1 id="title" contenteditable="plaintext-only" role="textbox" aria-label="Post title" data-placeholder="Title" spellcheck="true"></h1>
 <div class="post-date" id="post-time">Publication time is added automatically.</div>

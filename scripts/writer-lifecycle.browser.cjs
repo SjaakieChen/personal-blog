@@ -49,7 +49,25 @@ const server=http.createServer(async(req,res)=>{
   await page.getByRole('button',{name:'Live post',exact:true}).click();await green();await inGroup('Live post','Published');
   assert.equal(await page.locator('#delete-draft').isVisible(),false);
   await page.locator('#body').fill('Unpublished changes.');await inGroup('Live post','Edits');await green();
-  assert.equal((await groups()).Published.includes('Live post'),false);
+  assert.equal((await groups()).Published.includes('Live post'),true);
+  const editBefore=structuredClone(cloud.drafts.find(d=>d.sourcePath==='_posts/2026-10-01-live.md'));
+  await page.locator('#writing-nav [data-writing-state="published"]').filter({hasText:'Live post'}).click();await green();
+  assert.equal(await page.locator('#body').textContent(),'Published words.');
+  assert.equal(await page.locator('#body').getAttribute('contenteditable'),'false');
+  assert.equal(await page.locator('#publish').isVisible(),false);
+  assert.equal(await page.locator('#writing-nav [aria-current]').count(),1);
+  assert.equal(await page.locator('#writing-nav [aria-current]').getAttribute('data-writing-state'),'published');
+  await page.locator('#connect-github').click();await green();
+  assert.deepEqual(cloud.drafts.find(d=>d.id===editBefore.id).doc,editBefore.doc);
+  await page.reload();await green();
+  assert.equal(await page.locator('#body').textContent(),'Published words.');
+  assert.equal(await page.locator('#body').getAttribute('contenteditable'),'false');
+  await page.locator('#resume-edits').click();
+  assert.equal(await page.locator('#body').textContent(),'Unpublished changes.');
+  assert.equal(await page.locator('#body').getAttribute('contenteditable'),'true');
+  assert.equal(await page.locator('#writing-nav [aria-current]').getAttribute('data-writing-state'),'edits');
+  await page.locator('#writing-nav [data-writing-state="published"]').filter({hasText:'Live post'}).click();
+  await page.locator('#writing-nav [data-writing-state="edits"]').filter({hasText:'Live post'}).click();
   await page.reload();await green();await inGroup('Live post','Edits');
   assert.equal(await page.locator('#body').textContent(),'Unpublished changes.');
   await page.getByRole('button',{name:'Discard edits',exact:true}).click();await page.locator('#confirm-delete').click();await green();await inGroup('Live post','Published');
@@ -64,6 +82,7 @@ const server=http.createServer(async(req,res)=>{
   await page.waitForFunction(()=>!document.querySelector('#publish').disabled);await inGroup('New writing','Edits');await green();
   assert.equal(await page.locator('#body').textContent(),'Typed while publishing.');
   await page.locator('#publish').click();await inGroup('New writing','Published');await green();
+  await page.waitForFunction(()=>!document.querySelector('#publish').disabled);
   await page.reload();await green();await inGroup('New writing','Published');
   assert.equal((await groups()).Drafts.length,0);assert.equal((await groups()).Edits.length,0);
   await page.locator('#new-draft').click();await page.locator('#kind').selectOption('page');await page.locator('#title').fill('Appendix');await page.locator('#body').fill('Supporting material.');
@@ -79,6 +98,6 @@ const server=http.createServer(async(req,res)=>{
   await reader.goto(origin+'/posts/one/');await reader.locator('.sidebar').getByRole('link',{name:'Two',exact:true}).click();
   assert.equal(reader.url(),origin+'/#two');assert.equal(context.pages().length,pages);assert.equal(await reader.locator('article.post').count(),2);
   assert.deepEqual(errors,[]);
-  console.log('PASS: Drafts -> Published -> Edits -> Published, reload/sync, discard, legacy association without word changes, typing during publishing, continuous same-tab feed.');
+  console.log('PASS: published and edit entries coexist; live preview and saved edits remain separate through navigation, sync and reload; resume, discard, publish, in-flight edits and continuous feed.');
  }finally{await browser.close();server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

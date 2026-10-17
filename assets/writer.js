@@ -5,6 +5,7 @@
   const syncKey=key+'-synced-v3', sync=BlogDraftSync;
   let deletedDrafts=new Set(), baseline=[], saveQueue=Promise.resolve();
   let drafts=[], active, published=[], selectionRange=null, saveFailed=false;
+  let publishedPreview=null, previewPath='';
   const newDraft=()=>({id:crypto.randomUUID(),kind:'post',title:'',quote:'',doc:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   function acceptDraft(d) {
     return d && typeof d.id==='string' && typeof d.title==='string' && typeof d.quote==='string' && ['post','page'].includes(d.kind) && core.validNotes(d.notes || []) && (core.validDocument(d.doc) || typeof d.body==='string');
@@ -20,11 +21,13 @@
     deletedDrafts=new Set(state.deleted || []);
     drafts=drafts.filter(d=>!deletedDrafts.has(d.id));baseline=structuredClone(drafts);
     active=sessionStorage.getItem(key+'-active') || active;
+    previewPath=sessionStorage.getItem(key+'-published-preview') || '';
   } catch { $('index-status').textContent='Could not read stored drafts. Use Import JSON if needed.'; saveFailed=true; }
   let initialPlaceholder='';
   if(!drafts.length) {const blank=newDraft();initialPlaceholder=blank.id;drafts.push(blank);}
   if(!drafts.some(d=>d.id===active)) active=drafts[0].id;
-  const current=()=>drafts.find(d=>d.id===active);
+  const current=()=>publishedPreview || drafts.find(d=>d.id===active);
+  function leavePublishedPreview(){publishedPreview=null;previewPath='';sessionStorage.removeItem(key+'-published-preview');}
   const privateOrigin='https://yoga-jiaqi.taile0df21.ts.net:8446';
   const isPrivate=document.body.dataset.privateDesk==='true';
   let publishing=false, authPolling=false, pendingPublishId=null;
@@ -162,7 +165,7 @@
     publicationStatus('Saved to GitHub. The site is still updating; check the blog shortly.','Saved to GitHub');
   }
   async function publishCurrent() {
-    if(publishing)return;
+    if(publishing || publishedPreview)return;
     let publishingDraft;
     try {
       changed();if(titleConflict)throw new Error(titleConflict);
@@ -212,7 +215,7 @@
   }
   function updateDeleteButton() {
     const state=writingState(current());
-    $('delete-draft').hidden=state==='published';
+    $('delete-draft').hidden=!!publishedPreview || state==='published';
     $('delete-draft').textContent=state==='edit'?'Discard edits':'Delete draft';
     $('delete-draft').disabled=publishing;
     $('delete-post').hidden=!isPrivate || !current().sourcePath;
@@ -260,6 +263,7 @@
       publicationStatus('Removing “'+target.title+'” from GitHub…','Deleting');
       const result=await api('/api/delete',{path:target.path,baseSha:target.sha});
       removedPaths.add(target.path);published=published.filter(p=>p.path!==target.path);
+      if(previewPath===target.path)leavePublishedPreview();
       for(const d of drafts)if(d.sourcePath===target.path)deletedDrafts.add(d.id);
       const saved=await save();load();
       publicationStatus(!saved?'Removed from GitHub, but local draft cleanup could not be saved. Use Save JSON before closing.':result.alreadyRemoved?'Already removed from GitHub.':'Removed from GitHub and your drafts. The public blog is updating…','Deleted from GitHub');
@@ -359,24 +363,25 @@
   const newestFirst=field=>(a,b)=>(Date.parse(b[field] || b.date) || 0)-(Date.parse(a[field] || a.date) || 0) || String(a.path || a.id).localeCompare(String(b.path || b.id));
   function renderNav() {
     const nav=$('writing-nav'),sidebar=document.querySelector('.sidebar'),scroll=sidebar.scrollTop; nav.replaceChildren();
-    function heading(text) {const el=document.createElement('span');el.className='nav-date';el.textContent=text;nav.append(el);}
+    let section='';
+    const selected=publishedPreview?'published:'+publishedPreview.sourcePath:writingState(current())==='published'?'published:'+current().sourcePath:active;
+    function heading(text) {section=text.toLowerCase();const el=document.createElement('span');el.className='nav-date';el.textContent=text;nav.append(el);}
     function item(title,id,click,label) {
       const b=document.createElement('button');b.type='button';b.textContent=title || 'Untitled draft';
-      if(id===active) b.setAttribute('aria-current','page');
+      b.dataset.writingState=section;
+      if(id===selected) b.setAttribute('aria-current','page');
       if(label) {const small=document.createElement('span');small.className='draft-label';small.textContent=label;b.append(small);}
       b.addEventListener('click',click);nav.append(b);
     }
     for(const [state,label,field] of [['draft','Drafts','createdAt'],['edit','Edits','updatedAt']]) {
       heading(label);
       [...drafts].filter(d=>writingState(d)===state).sort(newestFirst(field)).forEach(d=>{
-        item(d.title,d.id,()=>{active=d.id;load();save();},d.kind==='page'?'Reference page':null);
+        item(d.title,d.id,()=>{leavePublishedPreview();active=d.id;load();save();},d.kind==='page'?'Reference page':null);
       });
     }
     heading('Published');
     [...published].sort(newestFirst('publishedAt')).forEach(entry=>{
-      const draft=drafts.find(d=>d.sourcePath===entry.path);
-      if(draft && writingState(draft)==='edit')return;
-      item(entry.title,draft?.id || entry.path,()=>openPublished(entry),entry.kind==='page'?'Reference page':null);
+      item(entry.title,'published:'+entry.path,()=>openPublished(entry),entry.kind==='page'?'Reference page':null);
     });
     sidebar.scrollTop=scroll;
   }
@@ -390,6 +395,9 @@
     titleConflict='';$('title').removeAttribute('aria-invalid');
     const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
     $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d),d.notes);$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
+    for(const id of ['title','quote','body']){$(id).contentEditable=publishedPreview?'false':id==='body'?'true':'plaintext-only';$(id).setAttribute('aria-readonly',String(!!publishedPreview));}
+    for(const button of document.querySelectorAll('[data-command],#add-reference,#add-note,#restore'))button.disabled=!!publishedPreview;
+    $('publish').hidden=!!publishedPreview;$('resume-edits').hidden=!publishedPreview;$('published-version').hidden=!publishedPreview;
     $('publish-panel').hidden=true;$('view-published').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
     updateDeleteButton();
@@ -400,6 +408,7 @@
     return normalized && (drafts.some(other=>other.id!==d.id && other.kind===d.kind && sync.titleKey(other.title)===normalized) || published.some(other=>other.path!==d.sourcePath && other.path!==d.targetPath && other.kind===d.kind && sync.titleKey(other.title)===normalized));
   }
   function changed() {
+    if(publishedPreview)return;
     const d=current(),title=$('title').textContent,kind=$('kind').value;
     titleConflict=duplicateTitle(title,{...d,kind})?'This title already exists. Open the existing draft or post, or choose another title.':'';
     if(!titleConflict){d.title=title;d.kind=kind;}
@@ -454,12 +463,19 @@
     });
   });
   $('new-draft').addEventListener('click',()=>{
+    leavePublishedPreview();
     const blank=drafts.find(d=>!d.title.trim());
     const d=blank || newDraft();if(!blank)drafts.unshift(d);
     active=d.id;load();save();$('title').focus();
   });
   function openPublished(entry) {
     const existing=drafts.find(d=>d.sourcePath===entry.path);
+    if(existing && writingState(existing)==='edit') {
+      active=existing.id;previewPath=entry.path;sessionStorage.setItem(key+'-published-preview',previewPath);
+      publishedPreview={...entryDraft(entry),id:existing.id,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date};
+      load();save();return;
+    }
+    leavePublishedPreview();
     if(existing){
       // Refresh an untouched cached copy in place, keeping a single sidebar entry.
       if(existing.sourceSha!==entry.sourceSha && existing.publishedFingerprint===writingFingerprint(existing)){
@@ -477,6 +493,10 @@
     }
     load();save();
   }
+  $('resume-edits').addEventListener('click',()=>{
+    const draft=drafts.find(d=>d.sourcePath===previewPath);
+    leavePublishedPreview();if(draft)active=draft.id;load();save();
+  });
   $('publish').addEventListener('click',publishCurrent);
   $('connect-github').addEventListener('click',syncDesk);
   function captureWriterView() {
@@ -531,6 +551,7 @@
       if(a){a.textContent=i<0?'*?':'*'.repeat(i+1);a.href='#'+key+'-note-'+(i+1);a.removeAttribute('target');a.removeAttribute('rel');a.setAttribute('aria-label','Explanation '+(i+1));}
     });
     $('note-preview').querySelectorAll('li').forEach((li,i)=>{
+      if(publishedPreview)return;
       const button=document.createElement('button');button.type='button';button.className='edit-reference';button.textContent='Edit note';
       button.addEventListener('click',()=>openNote(notes[i].id));li.querySelector('.note-text').append(button);
     });
@@ -547,11 +568,12 @@
       else {link.textContent='['+(index+1)+']';link.href='#'+key+'-'+(index+1);link.setAttribute('aria-label','Reference '+(index+1)+(marker.dataset.locator?', '+marker.dataset.locator:''));}
     });
     $('reference-preview').innerHTML=core.renderReferences(refs,key);
-    $('quote-source').hidden=!d.quote.trim();
-    $('quote-block').hidden=false;
+    $('quote-source').hidden=!!publishedPreview || !d.quote.trim();
+    $('quote-block').hidden=!!publishedPreview && !d.quote.trim();
     $('quote-citation').innerHTML=d.quote.trim() && d.quoteReference?core.citation(d.quoteReference,refs,key,d.quoteLocator || ''):'';
     $('cite-quote').textContent=d.quoteReference?'Edit quote source':'Choose quote source';
     $('reference-preview').querySelectorAll('li').forEach((li,i)=>{
+      if(publishedPreview)return;
       const button=document.createElement('button');button.type='button';button.className='edit-reference';button.textContent='Edit source';
       button.addEventListener('click',()=>openReference('edit',refs[i].id));li.append(button);
     });
@@ -708,6 +730,11 @@
     if(request!==indexRequest)return;
     published=[...new Map([...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path)).map(p=>[p.path,p])).values()].sort(newestFirst('publishedAt'));
     const reconciled=reconcilePublished();renderNav();updateDeleteButton();
+    if(previewPath) {
+      const entry=published.find(p=>p.path===previewPath);
+      if(!entry){leavePublishedPreview();load();}
+      else if(!publishedPreview || publishedPreview.sourceSha!==entry.sourceSha){const view=captureWriterView();openPublished(entry);restoreWriterView(view);}
+    }
     if(isPrivate){
       let cleanup=false;
       for(const d of drafts)if(d.sourcePath && d.publishedFingerprint===writingFingerprint(d) && !published.some(p=>p.path===d.sourcePath)){
