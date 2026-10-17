@@ -2,6 +2,7 @@ import base64
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('publisher', Path(__file__).resolve().parents[1]/'publisher/server.py')
@@ -10,6 +11,23 @@ spec.loader.exec_module(publisher)
 
 
 class PublishingTests(unittest.TestCase):
+    def test_private_drafts_persist_and_reject_stale_writes(self):
+        draft={'id':'one','kind':'post','title':'Private','quote':'','doc':[{'runs':[{'text':'Private draft'}]}]}
+        with tempfile.TemporaryDirectory() as directory, patch.object(publisher,'STATE',Path(directory)):
+            self.assertEqual(publisher.read_drafts()['revision'],0)
+            first=publisher.write_drafts({'revision':0,'drafts':[draft],'deleted':[]})
+            self.assertEqual(publisher.read_drafts(),first)
+            self.assertEqual(publisher.write_drafts(first),first)
+            with self.assertRaises(RuntimeError) as error:
+                publisher.write_drafts({'revision':0,'drafts':[],'deleted':[]})
+            self.assertEqual(error.exception.status,409)
+            removed=publisher.write_drafts({'revision':first['revision'],'drafts':[],'deleted':['one']})
+            attempted_restore=publisher.write_drafts({'revision':removed['revision'],'drafts':[draft],'deleted':[]})
+            self.assertEqual(attempted_restore['drafts'],[])
+            self.assertEqual(attempted_restore['deleted'],['one'])
+            self.assertTrue((Path(directory)/'drafts.previous.json').exists())
+            with self.assertRaises(ValueError):publisher.write_drafts({'revision':2,'drafts':[{}],'deleted':[]})
+
     def test_create_preserves_unicode_and_fixed_repository(self):
         missing = RuntimeError('not found'); missing.status = 404
         with patch.object(publisher, 'repository_sources', return_value=('head', [])), patch.object(publisher, 'gh_api', side_effect=[missing, {'content': {'sha': 'new'}, 'commit': {'sha':'commit','committer': {'date':'now'}}}]) as api:

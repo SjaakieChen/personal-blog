@@ -7,6 +7,33 @@ const prepare = draft => build(draft, new Date('2026-10-15T14:20:00Z'));
 const draft = {id:'ab123456-7890',kind:'post',title:'A new thought',quote:'',date:'2026-10-15',body:'One paragraph.\n\nAnother paragraph.'};
 const references=[{id:'source-1',title:'Paper <title>',url:'https://example.org/paper.pdf',author:'Author',details:'2026',savedUrl:'/personal-blog/reference/'}];
 
+test('note citations survive source cleanup and use the same reference destination',()=>{
+  const core=require('../assets/writer-core');
+  const d={...draft,doc:[{runs:[{text:'A sentence.',note:'n'}]}],notes:[{id:'n',text:'Extra detail.',reference:'source-1'}],references:[{id:'unused',title:'Unused',url:'https://example.org/unused'},...references]};
+  assert.deepEqual(core.usedReferences(d),references);
+  const html=prepare(d).content;
+  assert.match(html,/Extra detail\.<sup class="citation"/);
+  assert.match(html,/href="#ref-ab123456-7890-1"/);
+  assert.doesNotMatch(html,/example.org\/unused/);
+  assert.throws(()=>prepare({...d,references:[]}),/explanation citation/);
+  assert.deepEqual(core.usedReferences({...d,doc:[{runs:[{text:'No note'}]}]}),[]);
+});
+
+test('targeted JSON updates retain identity and history and reject stale writing',()=>{
+  const core=require('../assets/writer-core');
+  const base={...draft,doc:[{runs:[{text:'Original text'}]}],sourcePath:'_posts/original.md',sourceSha:'abc',createdAt:'2026-10-15T00:00:00Z'};
+  const updated={...base,doc:[{runs:[{text:'Original text',reference:'source-1'}]}],references};
+  const data={type:'blog-draft-update',version:1,id:base.id,base,updated};
+  const result=core.applyDraftUpdate(base,data);
+  assert.equal(result.id,base.id);assert.equal(result.sourceSha,'abc');assert.equal(result.sourcePath,base.sourcePath);assert.equal(result.createdAt,base.createdAt);
+  assert.deepEqual(result.savedVersions,[base]);assert.equal(result.doc[0].runs[0].reference,'source-1');
+  assert.equal(core.applyDraftUpdate(result,data),result,'reimport is idempotent');
+  assert.throws(()=>core.applyDraftUpdate({...base,doc:[{runs:[{text:'New typing'}]}]},data),/newer edits/);
+  assert.throws(()=>core.applyDraftUpdate(base,{...data,id:'different'}),/Invalid/);
+  assert.throws(()=>core.applyDraftUpdate(base,{...data,updated:{...updated,title:'Duplicate'}}),/title and type/);
+  assert.equal(base.doc[0].runs[0].text,'Original text');assert.equal(base.savedVersions,undefined);
+});
+
 test('references include only live body and opening-quote citations, with compact numbering',()=>{
   const refs=['unused','quote','body','named'].map(id=>({id,title:id,url:'https://example.org/'+id}));
   const doc=[{runs:[{text:'First',reference:'body'},{text:' Again',reference:'body'},{text:'',reference:'named',label:'demo',labelStyle:'small'}]}];

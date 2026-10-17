@@ -27,6 +27,51 @@ identity = None
 source_cache = {}
 entry_cache = {}
 index_lock = threading.Lock()
+draft_lock = threading.Lock()
+
+
+def read_drafts():
+    path = STATE/'drafts.json'
+    if not path.exists():
+        return {'revision': 0, 'drafts': [], 'deleted': []}
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
+def write_drafts(data):
+    if not isinstance(data, dict) or type(data.get('revision')) is not int:
+        raise ValueError('A draft revision is required.')
+    drafts, deleted = data.get('drafts'), data.get('deleted')
+    if not isinstance(drafts, list) or not isinstance(deleted, list) or not all(isinstance(i, str) for i in deleted):
+        raise ValueError('Invalid draft collection.')
+    for d in drafts:
+        if not isinstance(d, dict) or not all(isinstance(d.get(f), str) for f in ('id', 'title', 'quote')) or d.get('kind') not in ('post', 'page') or not isinstance(d.get('doc'), list):
+            raise ValueError('Invalid draft.')
+        for block in d['doc']:
+            if not isinstance(block, dict) or not isinstance(block.get('runs'), list) or not all(isinstance(r, dict) and isinstance(r.get('text'), str) for r in block['runs']):
+                raise ValueError('Invalid draft text.')
+    if len({d['id'] for d in drafts}) != len(drafts):
+        raise ValueError('Duplicate draft IDs.')
+    with draft_lock:
+        previous = read_drafts()
+        if data['revision'] != previous['revision']:
+            error = RuntimeError('Drafts changed on another device. Sync again.'); error.status = 409
+            raise error
+        removed = list(dict.fromkeys(previous['deleted'] + deleted))
+        next_state = {'revision': previous['revision'], 'drafts': [d for d in drafts if d['id'] not in removed], 'deleted': removed}
+        if next_state == previous:
+            return previous
+        next_state['revision'] += 1
+        STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+        def atomic_write(name, value):
+            temp = STATE/(name+'.tmp')
+            with temp.open('w', encoding='utf-8') as stream:
+                os.chmod(temp, 0o600)
+                json.dump(value, stream, ensure_ascii=False)
+                stream.flush(); os.fsync(stream.fileno())
+            os.replace(temp, STATE/name)
+        atomic_write('drafts.previous.json', previous)
+        atomic_write('drafts.json', next_state)
+        return next_state
 
 
 def valid_path(path):
@@ -144,9 +189,9 @@ def gh_api(path, method='GET', payload=None):
     return json.loads(result.stdout)
 
 
-def connected():
+def connected(force=False):
     global identity
-    if identity and time.time()-identity[1] < 120:
+    if not force and identity and time.time()-identity[1] < 120:
         return identity[0]
     try:
         user = gh_api('user')['login']
@@ -254,9 +299,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             if path == '/api/session':
-                user = connected()
+                user = connected(force=parse_qs(urlsplit(self.path).query).get('fresh') == ['1'])
                 return self.send(200, {'connected': bool(user), 'login': user, 'code': login_output,
                                        'verificationUrl': 'https://github.com/login/device', 'error': login_result})
+            if path == '/api/drafts':
+                with draft_lock:
+                    return self.send(200, read_drafts())
             if path == '/writing-index.json':
                 return self.send(200, writing_index())
             if path == '/api/deployment':
@@ -289,9 +337,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, {'error': 'Request not allowed.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 <= length <= 2_000_000:
+            if not 0 <= length <= (10_000_000 if self.path == '/api/drafts' else 2_000_000):
                 return self.send(413, {'error': 'Post too large.'})
             data = json.loads(self.rfile.read(length))
+            if self.path == '/api/drafts':
+                return self.send(200, write_drafts(data))
             if self.path == '/api/auth/start':
                 with lock:
                     if not login_process or login_process.poll() is not None:

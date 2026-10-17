@@ -33,5 +33,6 @@ dialog input:not([type=checkbox]),dialog select,dialog textarea { display: block
 #delete-dialog p { font: 14px/1.7 system-ui,sans-serif; }
 .editor-tools .connection-dot { width: 12px; height: 12px; min-width: 12px; padding: 0; margin: 0 8px; border: 1px solid #9b493d; border-radius: 50%; background: #b65345; }
 .editor-tools .connection-dot[data-connected="true"] { background: #42815b; border-color: #356b4a; }
+.editor-tools .connection-dot[data-syncing="true"] { background: #ba8738; border-color: #906725; }
 .editable-quote { display: inline-block; min-width: 150px; min-height: 1.5em; }
 @media(max-width:700px) { .desk-links { margin-top: 0; } .editor-tools { padding-top: 12px; margin-bottom: 28px; } }

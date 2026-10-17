@@ -44,6 +44,7 @@
   function usedReferences(draft) {
     const doc=draft.doc || plainDocument(draft.body || '');
     const ids=new Set(doc.flatMap(block=>block.runs.map(run=>run.reference).filter(Boolean)));
+    for(const note of usedNotes(doc,draft.notes))if(note.reference)ids.add(note.reference);
     if(draft.quote?.trim() && draft.quoteReference)ids.add(draft.quoteReference);
     return (draft.references || []).filter(reference=>ids.has(reference.id));
   }
@@ -58,10 +59,10 @@
     const i=notes.findIndex(n=>n.id===id);
     return '<sup class="citation explanation-marker" contenteditable="false" data-note="'+escapeHTML(id)+'"><a href="#'+escapeHTML(key)+'-note-'+(i+1)+'" aria-label="Explanation '+(i+1)+'">'+(i<0?'*?':'*'.repeat(i+1))+'</a></sup>';
   }
-  function renderNotes(doc, notes=[], key='preview') {
+  function renderNotes(doc, notes=[], key='preview', references=[]) {
     const used=usedNotes(doc,notes);
     if(!used.length)return '';
-    return '<section class="explanation-notes" data-notes="true" aria-label="Notes"><h2>Notes</h2><ul>'+used.map((n,i)=>'<li id="'+escapeHTML(key)+'-note-'+(i+1)+'"><span class="note-symbol" aria-label="Explanation '+(i+1)+'">'+'*'.repeat(i+1)+'</span><div class="note-text">'+escapeHTML(n.text).replace(/\n/g,'<br>')+'</div></li>').join('')+'</ul></section>';
+    return '<section class="explanation-notes" data-notes="true" aria-label="Notes"><h2>Notes</h2><ul>'+used.map((n,i)=>'<li id="'+escapeHTML(key)+'-note-'+(i+1)+'"><span class="note-symbol" aria-label="Explanation '+(i+1)+'">'+'*'.repeat(i+1)+'</span><div class="note-text">'+escapeHTML(n.text).replace(/\n/g,'<br>')+(n.reference?citation(n.reference,references,key,n.locator || ''):'')+'</div></li>').join('')+'</ul></section>';
   }
   function render(doc, references=[], key='preview', notes=[]) {
     if (!validDocument(doc)) throw new Error('Invalid draft text.');
@@ -88,6 +89,7 @@
     if(!Array.isArray(availableReferences) || availableReferences.some(r=>!r || typeof r.id!=='string' || !r.title?.trim() || !safeURL(r.url) || (r.savedUrl && !safeURL(r.savedUrl))) || new Set(availableReferences.map(r=>r.id)).size!==availableReferences.length) throw new Error('Each reference needs a title and a valid source link.');
     const references=usedReferences(draft);
     const hasReference=id=>references.some(r=>r.id===id);
+    if(usedNotes(doc,notes).some(n=>n.reference && !hasReference(n.reference)))throw new Error('An explanation citation is missing its reference.');
     if(draft.quote?.trim() && !hasReference(draft.quoteReference)) throw new Error('Choose a reference for the opening quote before publishing.');
     for(const block of doc)for(const run of block.runs) {
       if((run.reference && !hasReference(run.reference)) || (run.quoted && !hasReference(run.reference))) throw new Error('Every quotation and citation needs a reference.');
@@ -106,12 +108,29 @@
     metadata.push('notes: '+JSON.stringify(usedNotes(doc,notes)));
     if(draft.kind==='post') metadata.push(`date: ${JSON.stringify(draft.originalDate || now.toISOString())}`);
     else metadata.push(`permalink: ${JSON.stringify(draft.permalink || '/'+name+'/')}`);
-    const html=(render(doc,references,key,notes)+'\n'+renderNotes(doc,notes,key)+'\n'+renderReferences(references,key)).replace(/{/g,'&#123;').replace(/}/g,'&#125;');
+    const html=(render(doc,references,key,notes)+'\n'+renderNotes(doc,notes,key,references)+'\n'+renderReferences(references,key)).replace(/{/g,'&#123;').replace(/}/g,'&#125;');
     const content=metadata.concat(['---','',html,'']).join('\n');
     const url=draft.sourcePath ? 'https://github.com/SjaakieChen/personal-blog/edit/main/'+filename : 'https://github.com/SjaakieChen/personal-blog/new/main?filename='+encodeURIComponent(filename);
     return {filename,content,url};
   }
-  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,usedReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes};
+  function updateSignature(d) {
+    return JSON.stringify([d.title,d.kind,d.quote || '',render(d.doc || plainDocument(d.body || ''),d.references || [],'update',d.notes),d.references || [],d.quoteReference || '',d.quoteLocator || '',d.notes || []]);
+  }
+  function applyDraftUpdate(current, data, now=new Date()) {
+    if(data?.type!=='blog-draft-update' || data.version!==1 || data.id!==current.id || !data.base || !data.updated)throw new Error('Invalid draft update JSON.');
+    for(const value of [data.base,data.updated]) {
+      if(value.title!==current.title || value.kind!==current.kind || typeof value.quote!=='string' || !validDocument(value.doc))throw new Error('This update must keep the draft title and type.');
+      prepare({...current,...value,id:current.id,sourcePath:current.sourcePath,targetPath:current.targetPath});
+    }
+    if(updateSignature(current)===updateSignature(data.updated))return current;
+    if(updateSignature(current)!==updateSignature(data.base))throw new Error('This draft has newer edits. Save JSON again so the update can include them. Nothing was replaced.');
+    const {savedVersions:history,...previous}=current;
+    const updated={...current,savedVersions:[...(history || []),previous],updatedAt:now.toISOString()};
+    for(const field of ['quote','doc','references','notes','quoteReference','quoteLocator'])updated[field]=structuredClone(data.updated[field] ?? (['doc','references','notes'].includes(field)?[]:''));
+    delete updated.pendingPublication;
+    return updated;
+  }
+  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,usedReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes,updateSignature,applyDraftUpdate};
   root.BlogWriter=api;
   if(typeof module!=='undefined' && module.exports) module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
