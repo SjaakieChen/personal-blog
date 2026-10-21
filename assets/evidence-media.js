@@ -211,7 +211,7 @@
 
   function renderPane(body, pane, entries = []) {
     const available = [...pane.children];
-    const blocks = available.filter(block => block.hasAttribute('data-static-media'));
+    const blocks = [];
     for (const item of mediaIn(body, entries)) {
       if (blocks.some(block => block.dataset.mediaKey === item.key)) continue;
       const block = available.find(block => block.dataset.mediaKey === item.key) || createMedia(body.ownerDocument, item);
@@ -229,6 +229,9 @@
       }
       blocks.push(block);
     }
+    // Reuse linked server-rendered media in source order, then retain any
+    // unreferenced PDF or inline-media fallback after the linked items.
+    blocks.push(...available.filter(block => block.hasAttribute('data-static-media') && !blocks.includes(block)));
     // Preserve live frames across editor redraws and text edits. Neither the
     // editable HTML nor the serialized document gains media nodes.
     available.filter(block => !blocks.includes(block)).forEach(block => {

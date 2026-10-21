@@ -15,6 +15,9 @@ const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.
   + '<p><a href="/assets/evidence/example/knight.png">Same local preview</a></p>'
   + '<p><a href="https://sjaakiechen.github.io.example.org/personal-blog/assets/evidence/example/knight.png">Unrelated host</a></p>';
 const screenshot = '/assets/evidence/drafts/imec/alignment.webp';
+const staticText = '<p><a href="' + ownPublicImage + '">Knight shadow</a></p><p><a href="' + pdf + '">Original poster PDF</a></p>';
+const staticPane = '<div id="original-pdf-block" class="evidence-pdf" data-media-key="pdf:/assets/evidence/example/poster.pdf" data-static-media><figure><a href="' + pdf + '"><img src="/assets/evidence/example/page-1.webp" alt="Server-rendered poster"></a><figcaption>Original poster</figcaption></figure></div>'
+  + '<div data-media-key="inline:fallback" data-static-media><img src="/assets/evidence/example/page-2.webp" alt="Unreferenced fallback"></div>';
 const text = '<p>See the <a class="text-citation" data-reference="demo" data-label="demo" href="https://www.youtube.com/watch?v=Abc_123-Xyz">demo</a> for the alignment procedure.</p>'
   + '<p><a href="https://youtu.be/Abc_123-Xyz">Another link to the same demo</a>.</p>'
   + '<p>Read the <a href="' + pdf + '">original poster PDF</a>.</p>'
@@ -28,12 +31,12 @@ function html(mode) {
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css">'
     + '<script src="/assets/evidence-media.js" defer></script></head><body><div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'
     + '<article class="post"><div class="post-copy"><h1>Research evidence</h1><div ' + (writer ? 'id="body" contenteditable="true" ' : '') + 'class="post-body">'
-    + (plain ? '<p>A plain text article without media.</p>' : mode === '/private-writer' ? privateText : text) + '</div></div><aside class="post-media" '
-    + (writer ? 'id="evidence-media-preview" ' : '') + 'aria-label="Media" hidden></aside></article></div></main></div></body></html>';
+    + (plain ? '<p>A plain text article without media.</p>' : mode === '/private-writer' ? privateText : mode === '/static-archive' ? staticText : text) + '</div></div><aside class="post-media" '
+    + (writer ? 'id="evidence-media-preview" ' : '') + 'aria-label="Media" hidden>' + (mode === '/static-archive' ? staticPane : '') + '</aside></article></div></main></div></body></html>';
 }
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
-  if (['/writer', '/private-writer', '/archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
+  if (['/writer', '/private-writer', '/archive', '/static-archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
   if (pathname === screenshot || pathname === '/assets/evidence/example/knight.png' || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#e7edf1"/><text x="80" y="100" font-size="36">Project poster preview</text></svg>');return;
@@ -134,6 +137,28 @@ const server = http.createServer((req, res) => {
     assert.ok(mobile.mediaTop >= mobile.copyBottom, 'mobile stacks media after text');
     assert.ok(mobile.bodyWidth <= mobile.viewport && mobile.mainScrollWidth <= mobile.mainWidth + 1, 'no mobile horizontal overflow');
     await page.setViewportSize({width: 1280, height: 900});
+    await page.goto(origin + '/static-archive');
+    await page.waitForSelector('.evidence-image img');
+    const linkedImageKey = 'image:' + origin + '/assets/evidence/example/knight.png';
+    const pdfKey = 'pdf:/assets/evidence/example/poster.pdf';
+    const mediaOrder = () => page.locator('.post-media > [data-media-key]').evaluateAll(blocks => blocks.map(block => block.dataset.mediaKey));
+    assert.deepEqual(await mediaOrder(), [linkedImageKey, pdfKey, 'inline:fallback'], 'linked static PDF follows the photo in body order');
+    assert.equal(await page.locator('#original-pdf-block').count(), 1, 'existing server-rendered PDF is reused');
+    assert.equal(await page.locator('img[alt="Unreferenced fallback"]').count(), 1);
+    assert.equal(await page.locator('.post-body').innerHTML(), staticText);
+    await page.evaluate(({manifest, origin}) => {
+      const body = document.querySelector('.post-body');
+      window.originalStaticPdf = document.getElementById('original-pdf-block');
+      body.prepend(body.lastElementChild);
+      BlogEvidenceMedia.enhanceArticle(body, BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
+    }, {manifest, origin});
+    assert.deepEqual(await mediaOrder(), [pdfKey, linkedImageKey, 'inline:fallback'], 'reordered links move reused PDF to the corresponding position');
+    assert.equal(await page.evaluate(() => originalStaticPdf === document.getElementById('original-pdf-block')), true);
+    await page.evaluate(({manifest, origin}) => {
+      const body = document.querySelector('.post-body');body.firstElementChild.remove();
+      BlogEvidenceMedia.enhanceArticle(body, BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
+    }, {manifest, origin});
+    assert.deepEqual(await mediaOrder(), [linkedImageKey, pdfKey, 'inline:fallback'], 'unreferenced static PDF and inline fallback remain available');
     await page.goto(origin + '/plain');
     assert.equal(await page.locator('.post-media').evaluate(pane => pane.hidden), true);
     assert.equal(await page.locator('.post-media').evaluate(pane => getComputedStyle(pane).display), 'none');
