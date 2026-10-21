@@ -11,7 +11,7 @@
   function unique(drafts){
     const result=[],remapped=new Map();
     for(const draft of drafts){
-      const i=result.findIndex(d=>(d.sourcePath && d.sourcePath===draft.sourcePath) || (d.kind===draft.kind && titleKey(d.title)===titleKey(draft.title)));
+      const i=result.findIndex(d=>(d.sourcePath && d.sourcePath===draft.sourcePath) || (d.recoveredFrom?.id && d.recoveredFrom.id===draft.recoveredFrom?.id) || (!d.recoveredFrom && !draft.recoveredFrom && d.kind===draft.kind && titleKey(d.title)===titleKey(draft.title)));
       if(i<0){result.push(draft);continue;}
       const previous=result[i];
       const newest=(Date.parse(draft.updatedAt)||0)>(Date.parse(previous.updatedAt)||0)?draft:previous;
@@ -40,6 +40,34 @@
     for(const [old,id] of deduped.remapped){remapped.set(old,id);removed.add(old);}
     return {drafts:deduped.drafts,deleted:[...removed],remapped};
   }
-  const api={merge,same,titleKey};root.BlogDraftSync=api;
+  function validPublishedIndex(data,requireRevision=false) {
+    if(!data || !Array.isArray(data.posts) || !Array.isArray(data.pages))return false;
+    const entries=[...data.posts,...data.pages];
+    return entries.every(entry=>entry && typeof entry.title==='string' && typeof entry.html==='string' && /^(?:_posts|pages)\/[a-zA-Z0-9_-]+\.md$/.test(entry.path) && ['post','page'].includes(entry.kind) && (!requireRevision || /^[a-f0-9]{40}$/.test(entry.sourceSha))) && new Set(entries.map(entry=>entry.path)).size===entries.length;
+  }
+  function reconcileMissing(drafts, paths, fingerprint, makeId, now=new Date().toISOString()) {
+    const live=new Set(paths), missing=drafts.filter(d=>d.sourcePath && !live.has(d.sourcePath));
+    const result=drafts.filter(d=>!missing.includes(d)), deleted=[], remapped=new Map();
+    let recovered=0;
+    const signature=d=>{try{return fingerprint(d);}catch{return null;}};
+    for(const draft of missing) {
+      const writing=signature(draft);
+      const survivor=writing===null?-1:result.findIndex(other=>[other,...(other.savedVersions || [])].some(version=>signature(version)===writing));
+      if(survivor>=0) {
+        // Keep the complete legacy snapshot, including source identity and history.
+        result[survivor]=keepVersion(result[survivor],draft);
+        remapped.set(draft.id,result[survivor].id);
+      }else if(writing===null || draft.publishedFingerprint!==writing) {
+        const replacement=keepVersion({...draft,id:makeId(),referenceKey:draft.referenceKey || draft.id},draft);
+        replacement.recoveredFrom={id:draft.id,path:draft.sourcePath,sha:draft.sourceSha || null,at:now};
+        for(const field of ['sourcePath','sourceSha','targetPath','originalDate','permalink','publishedFingerprint','publishedAt','editedAt','pendingPublication','conflict'])delete replacement[field];
+        result.push(replacement);remapped.set(draft.id,replacement.id);recovered++;
+      }
+      // A new identity plus this tombstone prevents stale tabs restoring old routing.
+      deleted.push(draft.id);
+    }
+    return {drafts:result,deleted,remapped,recovered};
+  }
+  const api={merge,same,titleKey,validPublishedIndex,reconcileMissing};root.BlogDraftSync=api;
   if(typeof module!=='undefined' && module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

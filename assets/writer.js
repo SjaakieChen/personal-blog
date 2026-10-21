@@ -368,12 +368,21 @@
     const entry=published.find(p=>p.path===d.sourcePath), fingerprint=writingFingerprint(d);
     return fingerprint===(entry && writingFingerprint(entryDraft(entry))) || fingerprint===d.publishedFingerprint?'published':'edit';
   }
+  function refreshPublishedSnapshot(d,entry,fresh=entryDraft(entry)) {
+    Object.assign(d,{title:fresh.title,quote:fresh.quote,doc:fresh.doc,references:fresh.references,notes:fresh.notes,referenceKey:fresh.referenceKey,quoteReference:fresh.quoteReference,quoteLocator:fresh.quoteLocator,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});
+    d.publishedFingerprint=writingFingerprint(d);delete d.conflict;delete d.pendingPublication;
+  }
   function reconcilePublished() {
     let changed=false;
     for(const d of drafts) {
-      const entry=published.find(p=>p.path===(d.sourcePath || d.targetPath)) || (!d.sourcePath && published.find(p=>p.kind===d.kind && sync.titleKey(p.title)===sync.titleKey(d.title)));
+      const entry=published.find(p=>p.path===(d.sourcePath || d.targetPath)) || (!d.sourcePath && !d.recoveredFrom && published.find(p=>p.kind===d.kind && sync.titleKey(p.title)===sync.titleKey(d.title)));
       if(!entry)continue;
-      const fingerprint=writingFingerprint(entryDraft(entry));
+      const fresh=entryDraft(entry),fingerprint=writingFingerprint(fresh);
+      // Refresh clean cached writing when another device publishes. Real edits keep
+      // their old base SHA so publishing them still detects a concurrent change.
+      if(d.sourcePath && d.sourceSha!==entry.sourceSha && d.publishedFingerprint===writingFingerprint(d)) {
+        refreshPublishedSnapshot(d,entry,fresh);changed=true;
+      }
       const metadata={};
       if(!d.sourcePath){Object.assign(metadata,{sourcePath:entry.path,sourceSha:entry.sourceSha,referenceKey:d.referenceKey || entry.referenceKey,publishedFingerprint:fingerprint,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});}
       if(!d.publishedFingerprint || writingFingerprint(d)===fingerprint) {
@@ -410,7 +419,7 @@
     sidebar.scrollTop=scroll;
   }
   function timestamp(entry) {
-    if(!entry.publishedAt) {$('post-time').textContent='Publication time is added automatically.';return;}
+    if(!entry.publishedAt) {$('post-time').textContent=entry.recoveredFrom?'Recovered unpublished writing. The original version is kept in Save JSON.':'Publication time is added automatically.';return;}
     const format=s=>{const d=new Date(s);return new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',day:'numeric',month:'long',year:'numeric'}).format(d);};
     $('post-time').textContent=format(entry.publishedAt)+(entry.editedAt?' · Edited '+format(entry.editedAt):'');
   }
@@ -503,9 +512,7 @@
     if(existing){
       // Refresh an untouched cached copy in place, keeping a single sidebar entry.
       if(existing.sourceSha!==entry.sourceSha && existing.publishedFingerprint===writingFingerprint(existing)){
-        const fresh=entryDraft(entry);
-        Object.assign(existing,{title:fresh.title,quote:fresh.quote,doc:fresh.doc,references:fresh.references,notes:fresh.notes,referenceKey:fresh.referenceKey,quoteReference:fresh.quoteReference,quoteLocator:fresh.quoteLocator,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});
-        existing.publishedFingerprint=writingFingerprint(existing);delete existing.conflict;
+        refreshPublishedSnapshot(existing,entry);
       }
       active=existing.id;
     }
@@ -753,23 +760,32 @@
   function refreshIndex(){
     if(indexFlight?.request===indexRequest)return indexFlight.promise;
     const request=++indexRequest;
-    const promise=api(document.body.dataset.index,undefined,syncTimeout).then(data=>{
+    const promise=api(document.body.dataset.index,undefined,syncTimeout).then(async data=>{
     if(request!==indexRequest)return refreshIndex();
-    published=[...new Map([...(data.posts || []),...(data.pages || [])].filter(p=>!removedPaths.has(p.path)).map(p=>[p.path,p])).values()].sort(newestFirst('publishedAt'));
-    const reconciled=reconcilePublished();renderNav();updateDeleteButton();
+    if(!sync.validPublishedIndex(data,isPrivate))throw new Error('Incomplete published index.');
+    published=[...data.posts,...data.pages].filter(p=>!removedPaths.has(p.path)).sort(newestFirst('publishedAt'));
+    const beforeReconcile=structuredClone(current()),reconcileView=captureWriterView();
+    const reconciled=reconcilePublished();
+    if(!publishedPreview && !sync.same(beforeReconcile,current())){load();restoreWriterView(reconcileView);}
+    let cleanup=false;
+    if(isPrivate && !publishing) {
+      const result=sync.reconcileMissing(drafts,published.map(p=>p.path),writingFingerprint,()=>crypto.randomUUID());
+      if(result.deleted.length) {
+        const previous=current(),view=captureWriterView();
+        drafts=result.drafts;for(const id of result.deleted)deletedDrafts.add(id);
+        if(!drafts.length)drafts.push(newDraft());
+        active=result.remapped.get(active) || (drafts.some(d=>d.id===active)?active:drafts[0].id);
+        cleanup=true;
+        if(!sync.same(previous,current())){load();restoreWriterView(view);}
+      }
+    }
+    renderNav();updateDeleteButton();
     if(previewPath) {
       const entry=published.find(p=>p.path===previewPath);
       if(!entry){leavePublishedPreview();load();}
       else if(!publishedPreview || publishedPreview.sourceSha!==entry.sourceSha){const view=captureWriterView();openPublished(entry);restoreWriterView(view);}
     }
-    if(isPrivate){
-      let cleanup=false;
-      for(const d of drafts)if(d.sourcePath && d.publishedFingerprint===writingFingerprint(d) && !published.some(p=>p.path===d.sourcePath)){
-        deletedDrafts.add(d.id);cleanup=true;
-      }
-      if(cleanup || reconciled)save();
-    }
-    else if(reconciled)save();
+    if((cleanup || reconciled) && !await save())throw new Error('Could not save reconciled drafts.');
     $('index-status').textContent='';return true;
   }).catch(()=>{
     if(request!==indexRequest)return refreshIndex();
