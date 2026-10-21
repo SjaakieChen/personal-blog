@@ -1,6 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {youtubeId, pdfManifest, knownPdf} = require('../assets/evidence-media');
+const {youtubeId, imageURL, pdfManifest, knownPdf} = require('../assets/evidence-media');
+
+test('direct image links stay inside this site evidence assets and deduplicate URL fragments', () => {
+  const base = 'https://private.example:8446/write/', image = '/assets/evidence/drafts/imec/alignment.webp';
+  assert.equal(imageURL(image, base), 'https://private.example:8446' + image);
+  assert.equal(imageURL(image + '?v=1#view', base), 'https://private.example:8446' + image);
+  for (const suffix of ['png', 'jpg', 'jpeg', 'webp']) assert.ok(imageURL('/assets/evidence/imec/screenshot.' + suffix, base));
+  assert.equal(imageURL('/personal-blog/assets/evidence/imec/screenshot.png', 'https://public.example/personal-blog/posts/one/', 'https://public.example/personal-blog/'), 'https://public.example/personal-blog/assets/evidence/imec/screenshot.png');
+  assert.equal(imageURL(image, 'http://127.0.0.1:8787/write/'), 'http://127.0.0.1:8787' + image);
+  for (const value of ['https://external.example' + image, 'https://user@private.example:8446' + image, 'http://private.example:8446' + image, '/assets/secret.png', '/assets/evidence/../../private.png', '/assets/evidence/drafts/imec/file.svg', '/assets/evidence/drafts/imec/file.pdf', '/assets/evidence/drafts/imec/file%2epng', 'data:image/png;base64,AAAA', 'javascript:alert(1)', null]) assert.equal(imageURL(value, base), null, String(value));
+  assert.equal(imageURL(image, 'http://private.example:8446/write/'), null, 'real hosts require HTTPS');
+});
 
 test('YouTube URLs use exact HTTPS hosts and one valid video identifier', () => {
   const id = 'Abc_123-Xyz';

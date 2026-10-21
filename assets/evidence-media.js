@@ -1,5 +1,22 @@
 (function (root) {
   'use strict';
+  const scriptSource = root.document?.currentScript?.src;
+  const siteBase = scriptSource ? new URL('../', scriptSource).href : null;
+
+  function imageURL(value, base, assetBase) {
+    if (typeof value !== 'string' || /[\\\s<>]/.test(value)) return null;
+    try {
+      const current = new URL(base), url = new URL(value, current);
+      const assets = new URL('assets/evidence/', assetBase || new URL('/', current));
+      const localHTTP = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
+      if ((url.protocol !== 'https:' && !localHTTP) || url.origin !== current.origin
+          || assets.origin !== current.origin || url.username || url.password || !url.pathname.startsWith(assets.pathname)) return null;
+      const relative = url.pathname.slice(assets.pathname.length);
+      if (!/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(?:webp|png|jpe?g)$/.test(relative)) return null;
+      url.search = '';url.hash = '';
+      return url.href;
+    } catch { return null; }
+  }
 
   function youtubeId(value) {
     if (typeof value !== 'string') return null;
@@ -53,7 +70,9 @@
     for (const link of body.querySelectorAll('a[href]')) {
       if (link.closest('.references, [data-references], .explanation-notes, [data-notes]')) continue;
       const value = link.getAttribute('href'), id = youtubeId(value);
+      const image = imageURL(value, body.ownerDocument.baseURI, siteBase);
       const item = id ? {type: 'video', key: 'video:' + id, id, title: link.textContent.trim() || 'YouTube video'}
+        : image ? {type: 'image', key: 'image:' + image, url: image, title: link.textContent.trim() || 'Project screenshot'}
         : knownPdf(value, entries, body.ownerDocument.baseURI);
       if (item && !media.has(item.key)) media.set(item.key, item);
     }
@@ -61,7 +80,7 @@
   }
 
   function createMedia(doc, item) {
-    const block = doc.createElement(item.type === 'video' ? 'figure' : 'div');
+    const block = doc.createElement(item.type === 'pdf' ? 'div' : 'figure');
     block.dataset.mediaKey = item.key;
     if (item.type === 'video') {
       block.className = 'evidence-video';
@@ -75,6 +94,14 @@
       const caption = doc.createElement('figcaption');
       caption.textContent = item.title;
       block.append(frame, caption);
+    } else if (item.type === 'image') {
+      block.className = 'evidence-image';
+      const link = doc.createElement('a'), image = doc.createElement('img'), caption = doc.createElement('figcaption');
+      link.href = item.url;link.target = '_blank';link.rel = 'noopener noreferrer';
+      link.setAttribute('aria-label', 'Open full-size image: ' + item.title);
+      image.src = item.url;image.alt = item.title;image.loading = 'lazy';
+      caption.textContent = item.title;
+      link.append(image);block.append(link, caption);
     } else {
       block.className = 'evidence-pdf';
       item.previews.forEach((src, index) => {
@@ -101,6 +128,10 @@
       const block = available.find(block => block.dataset.mediaKey === item.key) || createMedia(body.ownerDocument, item);
       if (item.type === 'video') {
         block.querySelector('iframe').title = item.title;
+        block.querySelector('figcaption').textContent = item.title;
+      } else if (item.type === 'image') {
+        block.querySelector('img').alt = item.title;
+        block.querySelector('a').setAttribute('aria-label', 'Open full-size image: ' + item.title);
         block.querySelector('figcaption').textContent = item.title;
       }
       blocks.push(block);
@@ -148,7 +179,7 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, pdfManifest, knownPdf, mediaIn, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, pdfManifest, knownPdf, mediaIn, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;

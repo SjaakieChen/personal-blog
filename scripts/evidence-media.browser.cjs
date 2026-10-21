@@ -10,10 +10,14 @@ const manifest = {'/evidence/example/': {pdf: '/assets/evidence/example/poster.p
     title: 'Private example paper', previews: [1, 10, 16].map(page => '/assets/evidence/drafts/example/page-' + page + '.webp'),
     preview_pages: [1, 10, 16], total_pages: 22}};
 const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.pdf">full private paper</a>.</p>';
+const screenshot = '/assets/evidence/drafts/imec/alignment.webp';
 const text = '<p>See the <a class="text-citation" data-reference="demo" data-label="demo" href="https://www.youtube.com/watch?v=Abc_123-Xyz">demo</a> for the alignment procedure.</p>'
   + '<p><a href="https://youtu.be/Abc_123-Xyz">Another link to the same demo</a>.</p>'
   + '<p>Read the <a href="' + pdf + '">original poster PDF</a>.</p>'
   + '<p><a href="https://youtube.com.example.org/watch?v=Zyx-321_cbA">Unsupported link</a></p>'
+  + '<p><a href="' + screenshot + '">Camera-guided placement</a></p>'
+  + '<p><a href="' + screenshot + '#full-size">Same screenshot again</a></p>'
+  + '<p><a href="https://external.example' + screenshot + '">External image stays a link</a></p>'
   + '<div class="references"><p><a href="https://youtu.be/Zyx-321_cbA">Reference only</a></p></div>';
 function html(mode) {
   const writer = mode === '/writer' || mode === '/private-writer', plain = mode === '/plain';
@@ -27,7 +31,7 @@ const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   if (['/writer', '/private-writer', '/archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
-  if (/^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
+  if (pathname === screenshot || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#e7edf1"/><text x="80" y="100" font-size="36">Project poster preview</text></svg>');return;
   }
   if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
@@ -51,6 +55,12 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('#body iframe, #body img').count(), 0, 'media never enters saved rich text');
     assert.equal(await page.locator('.post-media iframe').count(), 1, 'inline and named citation links deduplicate');
     assert.equal(await page.locator('.post-media .evidence-pdf img').count(), 2);
+    assert.equal(await page.locator('.post-media .evidence-image img').count(), 1, 'ordinary image links deduplicate; external images do not embed');
+    assert.equal(await page.locator('.evidence-image img').getAttribute('src'), origin + screenshot);
+    assert.equal(await page.locator('.evidence-image img').getAttribute('alt'), 'Camera-guided placement');
+    assert.equal(await page.locator('.evidence-image figcaption').textContent(), 'Camera-guided placement');
+    assert.equal(await page.locator('.evidence-image a').getAttribute('href'), origin + screenshot);
+    assert.equal(await page.locator('.evidence-image a').getAttribute('target'), '_blank', 'screenshot opens full size');
     assert.equal(await page.locator('.evidence-pdf a').first().getAttribute('href'), pdf, 'preview opens stable public PDF');
     assert.equal(await page.locator('.evidence-pdf img').first().getAttribute('src'), origin + '/assets/evidence/example/page-1.webp');
     const boxes = await page.evaluate(() => {
@@ -68,6 +78,11 @@ const server = http.createServer((req, res) => {
     await page.locator('#body a').first().evaluate(anchor => { anchor.textContent = 'Updated demo'; });
     await page.waitForFunction(() => document.querySelector('iframe').title === 'Updated demo');
     assert.equal(await page.evaluate(() => originalFrame === document.querySelector('iframe')), true, 'caption edit preserves playback');
+    await page.locator('#body a').filter({hasText:'Camera-guided placement'}).evaluate(anchor => { anchor.textContent = 'Updated screenshot caption'; });
+    await page.waitForFunction(() => document.querySelector('.evidence-image figcaption').textContent === 'Updated screenshot caption');
+    assert.equal(await page.locator('.evidence-image img').getAttribute('alt'), 'Updated screenshot caption');
+    await page.locator('#body').evaluate(body => { body.innerHTML = '<p><a href="https://youtu.be/Abc_123-Xyz">Only video</a></p>'; });
+    await page.waitForFunction(() => document.querySelectorAll('.post-media iframe').length === 1 && document.querySelectorAll('.post-media img').length === 0);
     await page.locator('#body').evaluate(body => { body.innerHTML = '<p>Only words remain.</p>'; });
     await page.waitForFunction(() => document.querySelector('.post-media').hidden);
     assert.equal(await page.locator('.post-media iframe, .post-media img').count(), 0);
@@ -87,6 +102,7 @@ const server = http.createServer((req, res) => {
     await page.goto(origin + '/archive');
     await page.waitForSelector('.evidence-pdf img');
     assert.equal(await page.locator('.post-body').innerHTML(), text, 'public fallback links stay in the text');
+    assert.equal(await page.locator('.post-media .evidence-image img').count(), 1, 'public image links also use the media pane');
     await page.evaluate(() => BlogEvidenceMedia.enhanceArticle(document.querySelector('.post-body')));
     assert.equal(await page.locator('iframe').count(), 1, 'rendering is idempotent');
     await page.locator('.post-body').evaluate(body => {
