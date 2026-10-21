@@ -23,6 +23,17 @@ test('direct image links stay inside this site evidence assets and deduplicate U
   assert.equal(imageURL(image, 'http://private.example:8446/write/'), null, 'real hosts require HTTPS');
 });
 
+test('own public evidence images map to the current asset base for private previews', () => {
+  const prefix = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/';
+  const relative = 'ct-scanner/knight-shadow.png', value = prefix + relative;
+  assert.equal(imageURL(value, 'https://private.example:8446/write/', 'https://private.example:8446/'), 'https://private.example:8446/assets/evidence/' + relative);
+  assert.equal(imageURL(value + '?v=1#full-size', 'http://127.0.0.1:8787/write/', 'http://127.0.0.1:8787/'), 'http://127.0.0.1:8787/assets/evidence/' + relative);
+  assert.equal(imageURL(value, 'https://sjaakiechen.github.io/personal-blog/evidence/ct-scanner/', 'https://sjaakiechen.github.io/personal-blog/'), value);
+  for (const invalid of [value.replace('https:', 'http:'), value.replace('sjaakiechen.github.io', 'sjaakiechen.github.io.example.org'), value.replace('sjaakiechen.github.io', 'other.github.io'), value.replace('https://', 'https://user@'), value.replace('.io/', '.io:443/'), value.replace('.io/', '.io:8446/'), prefix + 'one/../knight.png', prefix + 'one/%2e%2e/knight.png', prefix + '../knight.png', prefix + 'knight.svg', prefix + 'knight%2epng']) {
+    assert.equal(imageURL(invalid, 'https://private.example:8446/write/', 'https://private.example:8446/'), null, invalid);
+  }
+});
+
 test('YouTube URLs use exact HTTPS hosts and one valid video identifier', () => {
   const id = 'Abc_123-Xyz';
   for (const url of [

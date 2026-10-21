@@ -21,13 +21,23 @@
   function imageURL(value, base, assetBase) {
     if (typeof value !== 'string' || /[\\\s<>]/.test(value)) return null;
     try {
-      const current = new URL(base), url = new URL(value, current);
+      const current = new URL(base);
+      let url = new URL(value, current);
       const assets = new URL('assets/evidence/', assetBase || new URL('/', current));
+      const filename = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(?:webp|png|jpe?g)$/;
+      const publicAssets = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/';
+      if (value.startsWith(publicAssets)) {
+        const relative = value.slice(publicAssets.length).split(/[?#]/, 1)[0];
+        if (!filename.test(relative)) return null;
+        // The private desk serves this blog's deployed assets locally. Keep the
+        // public href in the document; map only the generated image preview.
+        url = new URL(relative, assets);
+      }
       const localHTTP = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
       if ((url.protocol !== 'https:' && !localHTTP) || url.origin !== current.origin
           || assets.origin !== current.origin || url.username || url.password || !url.pathname.startsWith(assets.pathname)) return null;
       const relative = url.pathname.slice(assets.pathname.length);
-      if (!/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(?:webp|png|jpe?g)$/.test(relative)) return null;
+      if (!filename.test(relative)) return null;
       url.search = '';url.hash = '';
       return url.href;
     } catch { return null; }

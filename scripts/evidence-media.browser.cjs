@@ -9,7 +9,11 @@ const manifest = {'/evidence/example/': {pdf: '/assets/evidence/example/poster.p
   '/private-example/': {pdf: '/assets/evidence/drafts/example/paper.pdf', download_url: '/assets/evidence/drafts/example/paper.pdf',
     title: 'Private example paper', previews: [1, 10, 16].map(page => '/assets/evidence/drafts/example/page-' + page + '.webp'),
     preview_pages: [1, 10, 16], total_pages: 22}};
-const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.pdf">full private paper</a>.</p>';
+const ownPublicImage = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/example/knight.png';
+const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.pdf">full private paper</a>.</p>'
+  + '<p><a href="' + ownPublicImage + '">Knight shadow</a></p>'
+  + '<p><a href="/assets/evidence/example/knight.png">Same local preview</a></p>'
+  + '<p><a href="https://sjaakiechen.github.io.example.org/personal-blog/assets/evidence/example/knight.png">Unrelated host</a></p>';
 const screenshot = '/assets/evidence/drafts/imec/alignment.webp';
 const text = '<p>See the <a class="text-citation" data-reference="demo" data-label="demo" href="https://www.youtube.com/watch?v=Abc_123-Xyz">demo</a> for the alignment procedure.</p>'
   + '<p><a href="https://youtu.be/Abc_123-Xyz">Another link to the same demo</a>.</p>'
@@ -31,7 +35,7 @@ const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   if (['/writer', '/private-writer', '/archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
-  if (pathname === screenshot || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
+  if (pathname === screenshot || pathname === '/assets/evidence/example/knight.png' || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#e7edf1"/><text x="80" y="100" font-size="36">Project poster preview</text></svg>');return;
   }
   if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
@@ -91,6 +95,11 @@ const server = http.createServer((req, res) => {
     await page.goto(origin + '/private-writer');
     await page.waitForSelector('.evidence-pdf img');
     assert.equal(await page.locator('#body').innerHTML(), privateText, 'private draft text stays unchanged');
+    assert.equal(await page.locator('#body a').nth(1).getAttribute('href'), ownPublicImage, 'saved href retains its stable public address');
+    assert.equal(await page.locator('.evidence-image img').count(), 1, 'own public and local image references deduplicate; lookalike host stays a link');
+    assert.equal(await page.locator('.evidence-image img').getAttribute('src'), origin + '/assets/evidence/example/knight.png', 'private preview uses the locally deployed asset');
+    assert.equal(await page.locator('.evidence-image a').getAttribute('href'), origin + '/assets/evidence/example/knight.png');
+    assert.equal(await page.locator('.evidence-image figcaption').textContent(), 'Knight shadow');
     assert.equal(await page.locator('.evidence-pdf img').count(), 3, 'only representative pages are shown');
     assert.deepEqual(await page.locator('.evidence-pdf img').evaluateAll(images => images.map(image => image.alt)),
       [1, 10, 16].map(number => 'Private example paper, page ' + number + ' of 22'));
