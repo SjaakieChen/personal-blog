@@ -109,7 +109,11 @@
     status.className = 'evidence-demo-status';status.setAttribute('role', 'status');
     status.textContent = 'Loads only when you choose to open it.';caption.textContent = item.title;
     controls.append(load, unload, fullscreen, open);block.append(stage, controls, status, caption);
+    block.addEventListener('fullscreenchange', () => {
+      fullscreen.textContent = doc.fullscreenElement === block ? 'Exit fullscreen' : 'Fullscreen';
+    });
     function stop() {
+      if (doc.fullscreenElement === block) doc.exitFullscreen().catch(() => {});
       demoCleanup.get(block)?.();demoCleanup.delete(block);stage.replaceChildren();
       unload.hidden = true;fullscreen.hidden = true;load.hidden = false;load.disabled = false;
     }
@@ -118,7 +122,10 @@
       status.textContent = 'Emulator unloaded.';
     });
     fullscreen.addEventListener('click', async () => {
-      try { await block.requestFullscreen(); }
+      try {
+        if (doc.fullscreenElement === block) await doc.exitFullscreen();
+        else await block.requestFullscreen();
+      }
       catch { status.textContent = 'Fullscreen is unavailable. Use Open emulator for a separate tab.'; }
     });
     load.addEventListener('click', () => {

@@ -72,7 +72,12 @@ const server = http.createServer((req, res) => {
     assert.equal(requests.length, initialRequests, 'editor redraws preserve the running emulator');
     await pane.getByRole('button', {name: 'Fullscreen'}).click();
     await page.waitForFunction(() => document.fullscreenElement?.classList.contains('evidence-demo'));
+    await pane.getByRole('button', {name: 'Exit fullscreen', exact: true}).click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+    await pane.getByRole('button', {name: 'Fullscreen', exact: true}).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('evidence-demo'));
     await page.evaluate(() => document.exitFullscreen());
+    await pane.getByRole('button', {name: 'Fullscreen', exact: true}).waitFor();
     await frame.getByRole('button', {name: 'Fail', exact: true}).click();
     await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'error');
     assert.equal(await pane.locator('iframe').count(), 0, 'failed emulator is unloaded');
@@ -81,7 +86,10 @@ const server = http.createServer((req, res) => {
     assert.equal(requests.length, initialRequests + 3, 'retry loads a new document and bundle');
     await frame.getByRole('button', {name: 'Initialize'}).click();
     await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'ready');
+    await pane.getByRole('button', {name: 'Fullscreen', exact: true}).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('evidence-demo'));
     await pane.getByRole('button', {name: 'Unload', exact: true}).click();
+    await page.waitForFunction(() => !document.fullscreenElement);
     assert.equal(await pane.locator('iframe').count(), 0);
     assert.equal(await pane.getAttribute('data-state'), 'idle');
     assert.equal(await pane.getByRole('link', {name: 'Open emulator'}).getAttribute('href'), origin + demoPath + 'index.html');
