@@ -123,7 +123,7 @@ def ensure_unique_title(path, content):
     _, entries = repository_sources()
     for other, _, meta, _ in entries:
         if other != path and other.split('/')[0] == path.split('/')[0] and normalized(meta.get('title', '')) == title:
-            error = RuntimeError('A post or reference page with this title already exists. Open it to edit, or choose a different title.')
+            error = RuntimeError('A post or archive entry with this title already exists. Open it to edit, or choose a different title.')
             error.status = 409
             raise error
 
@@ -219,7 +219,7 @@ def read_login(process):
 def publish(data):
     path, content = data.get('path'), data.get('content')
     if not valid_path(path) or not isinstance(content, str) or not content.startswith('---\n') or len(content.encode()) > 1_000_000:
-        raise ValueError('Invalid post or reference page.')
+        raise ValueError('Invalid post or archive entry.')
     base_sha = data.get('baseSha')
     endpoint = f'repos/{REPO}/contents/{path}'
     try:
@@ -255,7 +255,7 @@ def publish(data):
 def delete_entry(data):
     path, base_sha = data.get('path'), data.get('baseSha')
     if not valid_path(path) or not isinstance(base_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', base_sha):
-        raise ValueError('Select a published post or reference page before deleting.')
+        raise ValueError('Select a published post or archive entry before deleting.')
     endpoint = f'repos/{REPO}/contents/{path}'
     try:
         existing = gh_api(endpoint+'?ref=main')

@@ -11,7 +11,7 @@ Write directly in the page: click the title or body. The editor uses the same st
 
 The editor sidebar separates Drafts (never published), Edits (unpublished changes to a live post), and Published. A live post always remains under Published, even when it also has an Edits entry. Published shows the live text; when saved edits exist, that view is read-only and Resume edits returns to the working copy. Selecting Edits opens those saved changes directly. Opening a published post without existing edits allows writing immediately. Publishing clears the Edits entry; text typed while a publication is in flight stays under Edits. Discard edits keeps the live version. New draft preserves earlier work. Publication and last-edit timestamps come from Git automatically; template-only updates do not change them.
 
-Publish sends the post directly through the private Yoga service to GitHub and reports the Pages deployment status. Connect GitHub is a one-time device sign-in; the credential stays on Yoga. The private desk requires the owner’s Tailscale connection. Posts receive their own URLs; Reference page creates supporting material outside the dated feed. See publisher/README.md for operations, security boundaries, and restart details.
+Publish sends the post directly through the private Yoga service to GitHub and reports the Pages deployment status. Connect GitHub is a one-time device sign-in; the credential stays on Yoga. The private desk requires the owner’s Tailscale connection. Posts receive their own URLs; Archive creates supporting material outside the dated feed. See publisher/README.md for operations, security boundaries, and restart details.
 
 ## Draft persistence
 
@@ -22,7 +22,7 @@ Save JSON downloads all drafts, including formatting, as JSON. Import JSON merge
 ## Source and deployment
 
 - _posts/: actual posts. Generated samples were removed.
-- pages/: standalone pages.
+- pages/: standalone archive entries.
 - _layouts/ and _includes/: shared reading layout and publication/edit times.
 - write.html and assets/writer*: direct-editing page, sidebar, rich document format, and local drafts.
 - writing-index.json: public post/page content for the editor sidebar.
@@ -35,9 +35,9 @@ Checks: node --test scripts/writer.test.cjs and python -m unittest discover -s s
 
 ## References
 
-Posts are the writing feed. Reference pages are supporting material, linked from citations rather than included in the feed. In the editor, Reference opens the source picker: reuse a source, choose a published reference page, or enter a URL/PDF link with title, author and publication details. Add an optional saved-copy link and a page/section locator. Select body text and check Quote the selected text to insert a cited quotation. The opening quote has its own Choose quote source control. Publishing requires sources for opening quotes and text marked as quotations.
+Posts are the writing feed. Archive entries are supporting material, linked from citations rather than included in the feed. In the editor, Reference opens the source picker: reuse a source, choose a published archive entry, or enter a URL/PDF link with title, author and publication details. Add an optional saved-copy link and a page/section locator. Select body text and check Quote the selected text to insert a cited quotation. The opening quote has its own Choose quote source control. Publishing requires sources for opening quotes and text marked as quotations.
 
-Sources appear as numbered inline citations and a References list, using the same fonts and layout in the editor and published page. Edit source changes the shared source entry. References, quote attribution and formatted citations are included in local drafts and JSON backups, and in published metadata so they can be reopened for editing. New reference page creates a supporting-page draft; publish it before selecting it from another post. PDF links and saved-copy links do not upload or archive a document automatically.
+Sources appear as numbered inline citations and a References list, using the same fonts and layout in the editor and published page. Edit source changes the shared source entry. References, quote attribution and formatted citations are included in local drafts and JSON backups, and in published metadata so they can be reopened for editing. New archive entry creates an archive draft; publish it before selecting it from another post. PDF links and saved-copy links do not upload or archive a document automatically.
 
 The home feed collapses long posts with Show more / Show less; individual post pages always show the complete article. Clicking a citation expands a collapsed article before following its reference target. Without JavaScript, the full text is available.
 

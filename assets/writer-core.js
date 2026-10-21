@@ -82,7 +82,7 @@
   function prepare(draft, now=new Date()) {
     const doc=draft.doc || plainDocument(draft.body || '');
     if(!draft.title.trim() || !validDocument(doc) || !doc.some(b=>b.runs.some(r=>r.text.trim() || r.label?.trim()))) throw new Error('Add a title and some writing first.');
-    if(!['post','page'].includes(draft.kind)) throw new Error('Choose a post or a page.');
+    if(!['post','page'].includes(draft.kind)) throw new Error('Choose Post or Archive.');
     const availableReferences=draft.references || [];
     const notes=draft.notes || [];
     if(!validNotes(notes))throw new Error('Each explanation needs text and a unique ID.');

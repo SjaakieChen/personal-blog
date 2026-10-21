@@ -202,7 +202,7 @@
       await refreshIndex();
       d=drafts.find(item=>item.id===d.id) || d;publishingDraft=d;
       const titleKey=value=>value.normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();
-      if(published.some(p=>p.kind===d.kind && p.path!==d.sourcePath && p.path!==d.targetPath && titleKey(p.title)===titleKey(d.title)))throw new Error('A '+(d.kind==='page'?'reference page':'post')+' with this title already exists. Open it to edit, or choose a different title.');
+      if(published.some(p=>p.kind===d.kind && p.path!==d.sourcePath && p.path!==d.targetPath && titleKey(p.title)===titleKey(d.title)))throw new Error((d.kind==='page'?'An archive entry':'A post')+' with this title already exists. Open it to edit, or choose a different title.');
       // Keep the exact request for a safe retry if the response is lost.
       const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator,d.notes]);
       if(!d.pendingPublication || d.pendingPublication.fingerprint!==fingerprint) {
@@ -244,7 +244,7 @@
     $('delete-draft').disabled=publishing;
     $('delete-post').hidden=!isPrivate || !current().sourcePath;
     $('delete-post').disabled=publishing || !current().sourceSha;
-    $('delete-post').textContent=current().kind==='page'?'Delete page':'Delete post';
+    $('delete-post').textContent=current().kind==='page'?'Delete archive entry':'Delete post';
   }
   let deletionTarget=null;
   $('delete-draft').addEventListener('click',()=>{
@@ -259,8 +259,8 @@
   $('delete-post').addEventListener('click',()=>{
     if(publishing || !current().sourcePath || !current().sourceSha)return;
     changed();const d=current();deletionTarget={id:d.id,path:d.sourcePath,sha:d.sourceSha,title:d.title};
-    $('delete-heading').textContent=d.kind==='page'?'Delete reference page?':'Delete published post?';
-    $('delete-description').textContent='Remove “'+d.title+'” from the public blog?'+(d.kind==='page'?' Existing references to this page will stop working.':'');
+    $('delete-heading').textContent=d.kind==='page'?'Delete archive entry?':'Delete published post?';
+    $('delete-description').textContent='Remove “'+d.title+'” from the public blog?'+(d.kind==='page'?' Existing references to this archive entry will stop working.':'');
     $('delete-detail').textContent='This also removes its local draft copies. The original remains recoverable from GitHub history.';
     $('confirm-delete').textContent='Delete from blog';
     $('delete-dialog').showModal();
@@ -400,12 +400,12 @@
     for(const [state,label,field] of [['draft','Drafts','createdAt'],['edit','Edits','updatedAt']]) {
       heading(label);
       [...drafts].filter(d=>writingState(d)===state).sort(newestFirst(field)).forEach(d=>{
-        item(d.title,d.id,()=>{leavePublishedPreview();active=d.id;load();save();},d.kind==='page'?'Reference page':null);
+        item(d.title,d.id,()=>{leavePublishedPreview();active=d.id;load();save();},d.kind==='page'?'Archive':null);
       });
     }
     heading('Published');
     [...published].sort(newestFirst('publishedAt')).forEach(entry=>{
-      item(entry.title,'published:'+entry.path,()=>openPublished(entry),entry.kind==='page'?'Reference page':null);
+      item(entry.title,'published:'+entry.path,()=>openPublished(entry),entry.kind==='page'?'Archive':null);
     });
     sidebar.scrollTop=scroll;
   }
@@ -613,7 +613,7 @@
     $('reference-form').reset();$('reference-error').textContent='';
     $('reference-display-field').hidden=target!=='body';
     $('reference-existing').replaceChildren(new Option('New source',''),...refs.map(r=>new Option(r.title,r.id)));
-    $('reference-page').replaceChildren(new Option('Choose a page (optional)',''),...published.filter(p=>p.kind==='page').map(p=>new Option(p.title,p.url)));
+    $('reference-page').replaceChildren(new Option('Choose an archive entry (optional)',''),...published.filter(p=>p.kind==='page').map(p=>new Option(p.title,p.url)));
     $('reference-existing').value=id || (target==='quote'?d.quoteReference || '':'');
     fillReference(refs.find(r=>r.id===$('reference-existing').value));
     $('reference-locator').value=target==='quote'?d.quoteLocator || '':'';

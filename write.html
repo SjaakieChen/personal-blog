@@ -25,7 +25,7 @@ permalink: /write/
 <button data-command="underline" type="button" aria-label="Underline" aria-pressed="false"><u>U</u></button>
 <button id="add-reference" type="button">Reference</button>
 <button id="add-note" type="button">* Note</button>
-<select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Reference page</option></select>
+<select id="kind" aria-label="Writing type"><option value="post">Post</option><option value="page">Archive</option></select>
 <button id="publish" class="primary" type="button">Publish</button>
 <button id="resume-edits" type="button" hidden>Resume edits</button>
 <button id="delete-post" type="button" hidden>Delete post</button>
@@ -78,16 +78,16 @@ permalink: /write/
 <label>Text size<select id="reference-display-style"><option value="normal">Normal text</option><option value="small">Small text (superscript)</option></select></label>
 </div>
 <label>Use a source<select id="reference-existing"><option value="">New source</option></select></label>
-<label>Your reference pages<select id="reference-page"><option value="">Choose a page (optional)</option></select></label>
+<label>Your archive<select id="reference-page"><option value="">Choose an archive entry (optional)</option></select></label>
 <label>Title<input id="reference-title" autocomplete="off" required></label>
 <label>Source URL or PDF link<input id="reference-url" autocomplete="off" required placeholder="https://…"></label>
 <label>Author / organisation<input id="reference-author" autocomplete="off"></label>
 <label>Publication details<input id="reference-details" autocomplete="off" placeholder="Year, journal, DOI…"></label>
-<label>Saved copy link (optional)<input id="reference-saved" autocomplete="off" placeholder="Your reference page, saved PDF, or archive URL"></label>
+<label>Saved copy link (optional)<input id="reference-saved" autocomplete="off" placeholder="An archive entry, saved PDF, or archive URL"></label>
 <label>Note (optional)<textarea id="reference-note" autocomplete="off" rows="2"></textarea></label>
 <label>Page / section for this citation<input id="reference-locator" autocomplete="off" placeholder="p. 12, §3…"></label>
 <label class="check-label"><input id="reference-quoted" type="checkbox"> Quote the selected text</label>
 <p id="reference-error" role="status"></p>
-<div class="actions"><button class="primary" type="submit">Insert reference</button><button id="reference-cancel" type="button">Cancel</button><button id="new-reference-page" type="button">New reference page</button></div>
+<div class="actions"><button class="primary" type="submit">Insert reference</button><button id="reference-cancel" type="button">Cancel</button><button id="new-reference-page" type="button">New archive entry</button></div>
 </form></dialog>
 </body></html>
