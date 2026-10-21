@@ -10,6 +10,7 @@ permalink: /write/
 <script src="{{ '/assets/writer-core.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/writer-sync.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/links.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
+<script src="{{ '/assets/evidence-media.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/writer.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script></head>
 <body class="writer" data-index="{{ '/writing-index.json' | relative_url }}">
 <div class="blog-shell">
@@ -42,6 +43,7 @@ permalink: /write/
 <blockquote id="quote-block" class="quote"><span id="quote" class="editable-quote" contenteditable="plaintext-only" role="textbox" aria-label="Opening quote" data-placeholder="Opening quote (optional)" spellcheck="true"></span> <span id="quote-citation"></span></blockquote>
 <div id="quote-source" class="quote-source" hidden><button id="cite-quote" type="button">Choose quote source</button></div>
 <div id="body" class="post-body" contenteditable="true" role="textbox" aria-label="Post body" aria-multiline="true" data-placeholder="Start writing…" spellcheck="true"></div>
+<section id="evidence-media-preview" aria-label="Video preview" hidden></section>
 <div id="note-preview"></div>
 <div id="reference-preview"></div>
 </article>

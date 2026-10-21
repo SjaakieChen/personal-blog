@@ -8,9 +8,16 @@ layout: default
 {% assign evidence = site.data.evidence[page.url] %}
 {% if evidence.pdf %}
 <div class="evidence-pdf">
+{% if evidence.previews %}
+{% for preview in evidence.previews %}
+<figure><a href="{{ evidence.pdf | relative_url | escape }}" aria-label="Open original poster PDF"><img src="{{ preview | relative_url | escape }}" width="2000" height="1500" alt="{{ evidence.title | escape }}, page {{ forloop.index }} of {{ forloop.length }}" loading="lazy"></a><figcaption>Page {{ forloop.index }} of {{ forloop.length }}</figcaption></figure>
+{% endfor %}
+{% else %}
 <object type="application/pdf" data="{{ evidence.pdf | relative_url | escape }}" aria-label="{{ evidence.title | escape }}" title="{{ evidence.title | escape }}">
 <p><a href="{{ evidence.pdf | relative_url | escape }}" download>Download poster (PDF)</a></p>
 </object>
+{% endif %}
 </div>
 {% endif %}
 </article>
+<script src="{{ '/assets/evidence-media.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
