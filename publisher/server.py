@@ -1,5 +1,6 @@
 """Private, Tailscale-authenticated publishing desk. No GitHub token reaches the browser."""
 import base64
+from html import unescape
 import json
 import mimetypes
 import os
@@ -10,7 +11,7 @@ import threading
 import time
 import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit, parse_qs, urlencode
+from urllib.parse import urlsplit, parse_qs, urlencode, unquote
 
 REPO = 'SjaakieChen/personal-blog'
 PUBLIC = 'https://sjaakiechen.github.io/personal-blog'
@@ -28,6 +29,28 @@ source_cache = {}
 entry_cache = {}
 index_lock = threading.Lock()
 draft_lock = threading.Lock()
+PRIVATE_MEDIA_PREFIX = '/assets/evidence/drafts/'
+MEDIA_TYPES = {'.pdf': 'application/pdf', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg'}
+
+
+def media_manifest():
+    public = json.loads((ROOT/'_data/evidence.json').read_text(encoding='utf-8'))
+    private_path = STATE/'media.json'
+    private = json.loads(private_path.read_text(encoding='utf-8')) if private_path.exists() else {}
+    if not isinstance(public, dict) or not isinstance(private, dict):
+        raise ValueError('Invalid media metadata.')
+    return {**public, **private}
+
+
+def private_media_file(path):
+    if not path.startswith(PRIVATE_MEDIA_PREFIX):
+        return None
+    relative = path[len(PRIVATE_MEDIA_PREFIX):]
+    if not re.fullmatch(r'[a-zA-Z0-9_-]+/[a-zA-Z0-9][a-zA-Z0-9_.-]*\.(?:pdf|webp|png|jpg|jpeg)', relative):
+        return None
+    root = (STATE/'media').resolve()
+    file = (root/relative).resolve()
+    return file if root in file.parents and file.is_file() else None
 
 
 def read_drafts():
@@ -220,6 +243,10 @@ def publish(data):
     path, content = data.get('path'), data.get('content')
     if not valid_path(path) or not isinstance(content, str) or not content.startswith('---\n') or len(content.encode()) > 1_000_000:
         raise ValueError('Invalid post or archive entry.')
+    # This namespace is private on every host; neither absolute nor relative
+    # links become public by committing the surrounding page to GitHub.
+    if PRIVATE_MEDIA_PREFIX in unquote(unescape(content)).replace('\\/', '/'):
+        raise ValueError('This draft links to a private attachment. Promote the attachment to the public blog and replace its link before publishing. Your draft stays private.')
     base_sha = data.get('baseSha')
     endpoint = f'repos/{REPO}/contents/{path}'
     try:
@@ -277,11 +304,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass  # Never log auth codes, post contents, or request query strings.
 
-    def send(self, status, body, content_type='application/json; charset=utf-8'):
+    def send(self, status, body, content_type='application/json; charset=utf-8', filename=None):
         raw = json.dumps(body).encode() if content_type.startswith('application/json') else body
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(raw)))
+        if filename is not None:
+            self.send_header('Content-Disposition', 'inline; filename="'+filename+'"')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
@@ -308,7 +337,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/writing-index.json':
                 return self.send(200, writing_index())
             if path == '/assets/evidence/media.json':
-                return self.send(200, json.loads((ROOT/'_data/evidence.json').read_text(encoding='utf-8')))
+                return self.send(200, media_manifest())
+            if path.startswith(PRIVATE_MEDIA_PREFIX):
+                file = private_media_file(path)
+                if file is None:
+                    return self.send(404, {'error': 'Not found.'})
+                return self.send(200, file.read_bytes(), MEDIA_TYPES[file.suffix], filename=file.name)
             if path == '/api/deployment':
                 commit = parse_qs(urlsplit(self.path).query).get('commit', [''])[0]
                 if not re.fullmatch(r'[a-f0-9]{40}', commit):
@@ -370,4 +404,5 @@ if __name__ == '__main__':
     os.umask(0o077)
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     (STATE/'github').mkdir(exist_ok=True, mode=0o700)
+    (STATE/'media').mkdir(exist_ok=True, mode=0o700)
     ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('BLOG_PORT', '8767'))), Handler).serve_forever()

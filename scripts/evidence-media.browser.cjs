@@ -5,25 +5,29 @@ const http = require('node:http'), fs = require('node:fs'), path = require('node
 const root = path.resolve(__dirname, '..');
 const pdf = 'https://public.example/blog/assets/evidence/example/poster.pdf';
 const manifest = {'/evidence/example/': {pdf: '/assets/evidence/example/poster.pdf', public_pdf: pdf,
-  title: 'Example group project poster', previews: ['/assets/evidence/example/page-1.webp', '/assets/evidence/example/page-2.webp']}};
+  title: 'Example group project poster', previews: ['/assets/evidence/example/page-1.webp', '/assets/evidence/example/page-2.webp']},
+  '/private-example/': {pdf: '/assets/evidence/drafts/example/paper.pdf', download_url: '/assets/evidence/drafts/example/paper.pdf',
+    title: 'Private example paper', previews: [1, 10, 16].map(page => '/assets/evidence/drafts/example/page-' + page + '.webp'),
+    preview_pages: [1, 10, 16], total_pages: 22}};
+const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.pdf">full private paper</a>.</p>';
 const text = '<p>See the <a class="text-citation" data-reference="demo" data-label="demo" href="https://www.youtube.com/watch?v=Abc_123-Xyz">demo</a> for the alignment procedure.</p>'
   + '<p><a href="https://youtu.be/Abc_123-Xyz">Another link to the same demo</a>.</p>'
   + '<p>Read the <a href="' + pdf + '">original poster PDF</a>.</p>'
   + '<p><a href="https://youtube.com.example.org/watch?v=Zyx-321_cbA">Unsupported link</a></p>'
   + '<div class="references"><p><a href="https://youtu.be/Zyx-321_cbA">Reference only</a></p></div>';
 function html(mode) {
-  const writer = mode === '/writer', plain = mode === '/plain';
+  const writer = mode === '/writer' || mode === '/private-writer', plain = mode === '/plain';
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css">'
     + '<script src="/assets/evidence-media.js" defer></script></head><body><div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'
     + '<article class="post"><div class="post-copy"><h1>Research evidence</h1><div ' + (writer ? 'id="body" contenteditable="true" ' : '') + 'class="post-body">'
-    + (plain ? '<p>A plain text article without media.</p>' : text) + '</div></div><aside class="post-media" '
+    + (plain ? '<p>A plain text article without media.</p>' : mode === '/private-writer' ? privateText : text) + '</div></div><aside class="post-media" '
     + (writer ? 'id="evidence-media-preview" ' : '') + 'aria-label="Media" hidden></aside></article></div></main></div></body></html>';
 }
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
-  if (['/writer', '/archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
+  if (['/writer', '/private-writer', '/archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
-  if (/^\/assets\/evidence\/example\/page-\d\.webp$/.test(pathname)) {
+  if (/^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#e7edf1"/><text x="80" y="100" font-size="36">Project poster preview</text></svg>');return;
   }
   if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
@@ -68,6 +72,17 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => document.querySelector('.post-media').hidden);
     assert.equal(await page.locator('.post-media iframe, .post-media img').count(), 0);
     assert.ok((await page.locator('.reading-column').boundingBox()).width <= 660, 'no empty media column remains');
+
+    await page.goto(origin + '/private-writer');
+    await page.waitForSelector('.evidence-pdf img');
+    assert.equal(await page.locator('#body').innerHTML(), privateText, 'private draft text stays unchanged');
+    assert.equal(await page.locator('.evidence-pdf img').count(), 3, 'only representative pages are shown');
+    assert.deepEqual(await page.locator('.evidence-pdf img').evaluateAll(images => images.map(image => image.alt)),
+      [1, 10, 16].map(number => 'Private example paper, page ' + number + ' of 22'));
+    assert.deepEqual(await page.locator('.evidence-pdf figcaption').allTextContents(),
+      [1, 10, 16].map(number => 'Private example paper · ' + number + ' / 22'));
+    assert.deepEqual(await page.locator('.evidence-pdf a').evaluateAll(links => links.map(link => link.href)),
+      Array(3).fill(origin + '/assets/evidence/drafts/example/paper.pdf'), 'all previews open the full private PDF');
 
     await page.goto(origin + '/archive');
     await page.waitForSelector('.evidence-pdf img');

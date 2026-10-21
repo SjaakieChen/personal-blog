@@ -22,10 +22,18 @@
       if (!entry || typeof entry.title !== 'string' || !path.test(entry.pdf || '')
           || !entry.pdf.endsWith('.pdf') || !Array.isArray(entry.previews) || !entry.previews.length
           || !entry.previews.every(preview => typeof preview === 'string' && path.test(preview) && !preview.endsWith('.pdf'))) return [];
+      const pages = entry.preview_pages ?? entry.previews.map((_, index) => index + 1);
+      const totalPages = entry.total_pages ?? (entry.preview_pages ? null : entry.previews.length);
+      if (!Array.isArray(pages) || pages.length !== entry.previews.length
+          || !pages.every(page => Number.isSafeInteger(page) && page > 0)
+          || (totalPages !== null && (!Number.isSafeInteger(totalPages) || totalPages < Math.max(...pages)))) return [];
       try {
-        const publicURL = new URL(entry.public_pdf);
-        if (publicURL.protocol !== 'https:' || publicURL.username || publicURL.password || publicURL.port) return [];
-        return [{type: 'pdf', key: 'pdf:' + entry.pdf, title: entry.title, publicURL,
+        const download = entry.download_url || entry.public_pdf;
+        if (typeof download !== 'string' || !download.trim()) return [];
+        const downloadURL = new URL(download, assetBase), baseURL = new URL(assetBase);
+        const sameOriginHTTP = downloadURL.protocol === 'http:' && downloadURL.origin === baseURL.origin;
+        if ((downloadURL.protocol !== 'https:' && !sameOriginHTTP) || downloadURL.username || downloadURL.password) return [];
+        return [{type: 'pdf', key: 'pdf:' + entry.pdf, title: entry.title, downloadURL, pages, totalPages,
           localURL: new URL(entry.pdf.slice(1), assetBase),
           previews: entry.previews.map(preview => new URL(preview.slice(1), assetBase).href)}];
       } catch { return []; }
@@ -36,7 +44,7 @@
     let url;
     try { url = new URL(value, base); } catch { return null; }
     if (url.username || url.password) return null;
-    return entries.find(entry => [entry.publicURL, entry.localURL].some(known =>
+    return entries.find(entry => [entry.downloadURL, entry.localURL].some(known =>
       url.origin === known.origin && url.pathname === known.pathname)) || null;
   }
 
@@ -71,14 +79,14 @@
       block.className = 'evidence-pdf';
       item.previews.forEach((src, index) => {
         const figure = doc.createElement('figure'), link = doc.createElement('a');
-        link.href = item.publicURL.href;
+        link.href = item.downloadURL.href;
         link.setAttribute('aria-label', 'Open original PDF');
         const image = doc.createElement('img');
         image.src = src;
-        image.alt = item.title + ', page ' + (index + 1) + ' of ' + item.previews.length;
+        image.alt = item.title + ', page ' + item.pages[index] + (item.totalPages ? ' of ' + item.totalPages : '');
         image.loading = 'lazy';
         const caption = doc.createElement('figcaption');
-        caption.textContent = item.title + ' · ' + (index + 1) + ' / ' + item.previews.length;
+        caption.textContent = item.title + ' · ' + item.pages[index] + (item.totalPages ? ' / ' + item.totalPages : '');
         link.append(image);figure.append(link, caption);block.append(figure);
       });
     }
