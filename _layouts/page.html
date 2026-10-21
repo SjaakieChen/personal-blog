@@ -4,4 +4,13 @@ layout: default
 <article class="post"><h1>{{ page.title | escape }}</h1>
 {% if page.published_at %}{% include post-time.html entry=page %}{% endif %}
 {% include quote.html entry=page %}
-<div class="post-body">{{ content }}</div></article>
+<div class="post-body">{{ content }}</div>
+{% assign evidence = site.data.evidence[page.url] %}
+{% if evidence.pdf %}
+<div class="evidence-pdf">
+<object type="application/pdf" data="{{ evidence.pdf | relative_url | escape }}" aria-label="{{ evidence.title | escape }}" title="{{ evidence.title | escape }}">
+<p><a href="{{ evidence.pdf | relative_url | escape }}" download>Download poster (PDF)</a></p>
+</object>
+</div>
+{% endif %}
+</article>

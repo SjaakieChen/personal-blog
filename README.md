@@ -39,6 +39,8 @@ Posts are the writing feed. Archive entries are supporting material, linked from
 
 Sources appear as numbered inline citations and a References list, using the same fonts and layout in the editor and published page. Edit source changes the shared source entry. References, quote attribution and formatted citations are included in local drafts and JSON backups, and in published metadata so they can be reopened for editing. New archive entry creates an archive draft; publish it before selecting it from another post. PDF links and saved-copy links do not upload or archive a document automatically.
 
+Evidence archive entries use the normal draft and Publish workflow with a fixed permalink. Store their original PDFs under `assets/evidence/` and add the permalink, PDF path and accessible title to `_data/evidence.yml`. The page template embeds the mapped PDF below the writing, with a download fallback. Keep a direct PDF link in the draft too. The PDF mapping stays separate from the editable writing, so reopening or republishing an entry preserves its embedded poster and stable PDF URL.
+
 The home feed collapses long posts with Show more / Show less; individual post pages always show the complete article. Clicking a citation expands a collapsed article before following its reference target. Without JavaScript, the full text is available.
 
 The main blog is a continuous feed, newest first. Sidebar links jump to a post in that feed in the same tab, including when starting from a standalone post URL. Post titles in the feed remain within that document. References to other pages and external sources still open separately.

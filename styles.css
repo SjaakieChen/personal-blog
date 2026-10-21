@@ -26,6 +26,8 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .post-body p { margin: 0 0 20px; }
 .post-body strong, .post-body b { font-weight: 650; }
 .post-body img { max-width: 100%; height: auto; }
+.evidence-pdf { margin-top: 32px; }
+.evidence-pdf object { display: block; width: 100%; height: clamp(360px,70vh,900px); border: 1px solid #dde0e1; }
 .post-body pre { overflow: auto; font-size: 15px; }
 .post-body h2 { font-size: 30px; margin-top: 32px; }
 .citation { font-size: .65em; font-style: normal; line-height: 0; vertical-align: super; white-space: nowrap; }
