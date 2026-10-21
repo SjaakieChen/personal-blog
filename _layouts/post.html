@@ -2,8 +2,11 @@
 layout: default
 ---
 <article class="post" id="{{ page.slug | escape }}">
+<div class="post-copy">
 <h1>{{ page.title | escape }}</h1>
 {% include post-time.html entry=page %}
 {% include quote.html entry=page %}
 <div class="post-body">{{ content }}</div>
+</div>
+{% include media-pane.html entry=page %}
 </article>

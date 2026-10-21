@@ -1,5 +1,7 @@
 import base64
 import importlib.util
+import io
+import json
 from pathlib import Path
 import unittest
 import tempfile
@@ -11,6 +13,17 @@ spec.loader.exec_module(publisher)
 
 
 class PublishingTests(unittest.TestCase):
+    def test_media_manifest_is_valid_json_on_private_desk(self):
+        handler=object.__new__(publisher.Handler)
+        handler.path='/assets/evidence/media.json'
+        handler.wfile=io.BytesIO()
+        with patch.object(handler,'allowed',return_value=True), patch.object(handler,'send_response') as status, patch.object(handler,'send_header'), patch.object(handler,'end_headers'):
+            handler.do_GET()
+        status.assert_called_once_with(200)
+        manifest=json.loads(handler.wfile.getvalue())
+        self.assertEqual(manifest,json.loads((publisher.ROOT/'_data/evidence.json').read_text(encoding='utf-8')))
+        self.assertTrue(manifest['/evidence/ct-scanner/']['previews'])
+
     def test_private_drafts_persist_and_reject_stale_writes(self):
         draft={'id':'one','kind':'post','title':'Private','quote':'','doc':[{'runs':[{'text':'Private draft'}]}]}
         with tempfile.TemporaryDirectory() as directory, patch.object(publisher,'STATE',Path(directory)):

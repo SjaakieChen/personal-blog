@@ -7,86 +7,159 @@
     try { url = new URL(value); } catch { return null; }
     if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
     let id;
-    if (url.hostname === 'youtu.be') {
-      id = url.pathname.slice(1);
-    } else if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)
+    if (url.hostname === 'youtu.be') id = url.pathname.slice(1);
+    else if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)
         && url.pathname === '/watch' && url.searchParams.getAll('v').length === 1) {
       id = url.searchParams.get('v');
     }
     return /^[A-Za-z0-9_-]{11}$/.test(id || '') ? id : null;
   }
 
-  function videosIn(container) {
-    return [...container.querySelectorAll('p')].flatMap(paragraph => {
-      if (paragraph.closest('.references, [data-references], .explanation-notes, [data-notes]')) return [];
-      const links = paragraph.querySelectorAll('a[href]');
-      if (links.length !== 1) return [];
-      const link = links[0], id = youtubeId(link.getAttribute('href'));
-      if (!id || link.closest('[data-reference], [data-note], .citation')) return [];
-      // Only an ordinary link and optional text formatting may fill the paragraph.
-      const copy = paragraph.cloneNode(true);
-      copy.querySelector('a').remove();
-      if (copy.textContent.trim() || [...copy.querySelectorAll('*')].some(node =>
-        !['STRONG', 'B', 'EM', 'I', 'U', 'SPAN'].includes(node.tagName))) return [];
-      return [{paragraph, id, title: link.textContent.trim() || 'YouTube video'}];
+  function pdfManifest(data, assetBase) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+    const path = /^\/assets\/evidence\/[A-Za-z0-9_/-]+\.(pdf|webp|png|jpe?g)$/;
+    return Object.values(data).flatMap(entry => {
+      if (!entry || typeof entry.title !== 'string' || !path.test(entry.pdf || '')
+          || !entry.pdf.endsWith('.pdf') || !Array.isArray(entry.previews) || !entry.previews.length
+          || !entry.previews.every(preview => typeof preview === 'string' && path.test(preview) && !preview.endsWith('.pdf'))) return [];
+      try {
+        const publicURL = new URL(entry.public_pdf);
+        if (publicURL.protocol !== 'https:' || publicURL.username || publicURL.password || publicURL.port) return [];
+        return [{type: 'pdf', key: 'pdf:' + entry.pdf, title: entry.title, publicURL,
+          localURL: new URL(entry.pdf.slice(1), assetBase),
+          previews: entry.previews.map(preview => new URL(preview.slice(1), assetBase).href)}];
+      } catch { return []; }
     });
   }
 
-  function createVideo(doc, video) {
-    const figure = doc.createElement('figure');
-    figure.className = 'evidence-video';
-    figure.dataset.videoId = video.id;
-    const frame = doc.createElement('iframe');
-    frame.src = 'https://www.youtube-nocookie.com/embed/' + video.id;
-    frame.title = video.title;
-    frame.loading = 'lazy';
-    frame.referrerPolicy = 'strict-origin-when-cross-origin';
-    frame.allow = 'encrypted-media; picture-in-picture; fullscreen';
-    frame.allowFullscreen = true;
-    figure.append(frame);
-    return figure;
+  function knownPdf(value, entries, base) {
+    let url;
+    try { url = new URL(value, base); } catch { return null; }
+    if (url.username || url.password) return null;
+    return entries.find(entry => [entry.publicURL, entry.localURL].some(known =>
+      url.origin === known.origin && url.pathname === known.pathname)) || null;
   }
 
-  function enhanceArchive(container) {
-    for (const video of videosIn(container)) {
-      const next = video.paragraph.nextElementSibling;
-      if (next?.classList.contains('evidence-video') && next.dataset.videoId === video.id) continue;
-      video.paragraph.after(createVideo(container.ownerDocument, video));
+  function mediaIn(body, entries = []) {
+    const media = new Map();
+    for (const link of body.querySelectorAll('a[href]')) {
+      if (link.closest('.references, [data-references], .explanation-notes, [data-notes]')) continue;
+      const value = link.getAttribute('href'), id = youtubeId(value);
+      const item = id ? {type: 'video', key: 'video:' + id, id, title: link.textContent.trim() || 'YouTube video'}
+        : knownPdf(value, entries, body.ownerDocument.baseURI);
+      if (item && !media.has(item.key)) media.set(item.key, item);
+    }
+    return [...media.values()];
+  }
+
+  function createMedia(doc, item) {
+    const block = doc.createElement(item.type === 'video' ? 'figure' : 'div');
+    block.dataset.mediaKey = item.key;
+    if (item.type === 'video') {
+      block.className = 'evidence-video';
+      const frame = doc.createElement('iframe');
+      frame.src = 'https://www.youtube-nocookie.com/embed/' + item.id;
+      frame.title = item.title;
+      frame.loading = 'lazy';
+      frame.referrerPolicy = 'strict-origin-when-cross-origin';
+      frame.allow = 'encrypted-media; picture-in-picture; fullscreen';
+      frame.allowFullscreen = true;
+      const caption = doc.createElement('figcaption');
+      caption.textContent = item.title;
+      block.append(frame, caption);
+    } else {
+      block.className = 'evidence-pdf';
+      item.previews.forEach((src, index) => {
+        const figure = doc.createElement('figure'), link = doc.createElement('a');
+        link.href = item.publicURL.href;
+        link.setAttribute('aria-label', 'Open original PDF');
+        const image = doc.createElement('img');
+        image.src = src;
+        image.alt = item.title + ', page ' + (index + 1) + ' of ' + item.previews.length;
+        image.loading = 'lazy';
+        const caption = doc.createElement('figcaption');
+        caption.textContent = item.title + ' · ' + (index + 1) + ' / ' + item.previews.length;
+        link.append(image);figure.append(link, caption);block.append(figure);
+      });
+    }
+    return block;
+  }
+
+  function renderPane(body, pane, entries = []) {
+    const available = [...pane.children];
+    const blocks = available.filter(block => block.hasAttribute('data-static-media'));
+    for (const item of mediaIn(body, entries)) {
+      if (blocks.some(block => block.dataset.mediaKey === item.key)) continue;
+      const block = available.find(block => block.dataset.mediaKey === item.key) || createMedia(body.ownerDocument, item);
+      if (item.type === 'video') {
+        block.querySelector('iframe').title = item.title;
+        block.querySelector('figcaption').textContent = item.title;
+      }
+      blocks.push(block);
+    }
+    // Preserve live frames across editor redraws and text edits. Neither the
+    // editable HTML nor the serialized document gains media nodes.
+    available.filter(block => !blocks.includes(block)).forEach(block => block.remove());
+    blocks.forEach((block, index) => {
+      if (pane.children[index] !== block) pane.insertBefore(block, pane.children[index] || null);
+    });
+    pane.hidden = !blocks.length;
+  }
+
+  function moveInlineMedia(body, pane) {
+    // Existing article images/video belong beside the text too. The writer
+    // never calls this: source documents and editable content remain intact.
+    for (const element of body.querySelectorAll('img, video, audio, object[type="application/pdf"]')) {
+      if (!body.contains(element) || element.closest('.references, .explanation-notes')) continue;
+      const originalParent = element.parentElement;
+      const figure = element.closest('figure');
+      const content = figure && body.contains(figure) ? figure
+        : originalParent?.tagName === 'A' ? originalParent : element;
+      const block = body.ownerDocument.createElement('div');
+      block.className = 'evidence-image';
+      block.dataset.staticMedia = '';
+      block.dataset.mediaKey = 'inline:' + pane.children.length;
+      block.append(content);pane.append(block);
+      if (originalParent?.tagName === 'P' && !originalParent.textContent.trim() && !originalParent.children.length) originalParent.remove();
     }
   }
 
-  function watchPreview(body, preview) {
-    function render() {
-      const videos = videosIn(body);
-      // Reuse frames, including across editor redraws, so unrelated typing never
-      // restarts playback. The editable document and its serialized runs stay intact.
-      const available = [...preview.querySelectorAll('.evidence-video')];
-      const figures = videos.map(video => {
-        const index = available.findIndex(figure => figure.dataset.videoId === video.id);
-        const figure = index < 0 ? createVideo(body.ownerDocument, video) : available.splice(index, 1)[0];
-        figure.querySelector('iframe').title = video.title;
-        return figure;
-      });
-      available.forEach(figure => figure.remove());
-      figures.forEach((figure, index) => {
-        if (preview.children[index] !== figure) preview.insertBefore(figure, preview.children[index] || null);
-      });
-      preview.hidden = !figures.length;
-    }
+  function enhanceArticle(body, entries = []) {
+    const pane = body.closest('.post')?.querySelector(':scope > .post-media');
+    if (!pane) return;
+    moveInlineMedia(body, pane);
+    renderPane(body, pane, entries);
+  }
+
+  function watchPreview(body, pane, getEntries = () => []) {
+    const render = () => renderPane(body, pane, getEntries());
     render();
     const observer = new root.MutationObserver(render);
     observer.observe(body, {childList: true, subtree: true, characterData: true,
       attributes: true, attributeFilter: ['href']});
-    return observer;
+    return {observer, render};
   }
 
-  const api = {youtubeId, videosIn, enhanceArchive, watchPreview};
+  const api = {youtubeId, pdfManifest, knownPdf, mediaIn, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;
+    let entries = [];
     const body = root.document.getElementById('body');
-    const preview = root.document.getElementById('evidence-media-preview');
-    if (body && preview) watchPreview(body, preview);
-    else root.document.querySelectorAll('.post-body').forEach(enhanceArchive);
+    const pane = root.document.getElementById('evidence-media-preview');
+    const preview = body && pane ? watchPreview(body, pane, () => entries) : null;
+    const refresh = () => preview ? preview.render()
+      : root.document.querySelectorAll('.post-body').forEach(body => enhanceArticle(body, entries));
+    refresh();
+    const source = root.document.currentScript?.src;
+    if (source) {
+      const assetBase = new URL('../', source);
+      root.fetch(new URL('assets/evidence/media.json', assetBase)).then(response => {
+        if (!response.ok) throw new Error('Media manifest unavailable');
+        return response.json();
+      }).then(data => { entries = pdfManifest(data, assetBase);refresh(); }).catch(() => {
+        // Text links, video embeds and server-rendered PDF previews remain usable.
+      });
+    }
   }
 })(typeof window === 'object' ? window : globalThis);

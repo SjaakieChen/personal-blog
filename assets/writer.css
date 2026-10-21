@@ -10,6 +10,7 @@ button,.button,select { border: 1px solid #a4b3be; border-radius: 0; padding: 7p
 .timeline button { border: 0; padding: 4px 0; background: transparent; color: var(--side-ink); font: inherit; text-align: left; text-decoration: underline; text-decoration-color: #a3a8a7; text-underline-offset: 4px; width: fit-content; overflow-wrap: anywhere; }
 .timeline button[aria-current] { color: #fff; text-decoration-thickness: 2px; }
 .draft-label { display: block; color: #b4bab9; font: 11px/1.5 system-ui,sans-serif; margin-top: 4px; }
+.nav-category { margin-top: 12px; color: #c2c9cc; font: 12px/1.5 system-ui,sans-serif; }
 .side-status { color: #c2c9cc; font: 12px/1.5 system-ui,sans-serif; margin-top: 24px; }
 [contenteditable] { outline: none; }
 [contenteditable]:focus-visible { outline: 1px dashed #9cb5c9; outline-offset: 7px; }

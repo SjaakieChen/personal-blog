@@ -46,7 +46,7 @@ const server=http.createServer(async(req,res)=>{
   const green=p=>p.waitForFunction(()=>document.querySelector('#connect-github').dataset.connected==='true',null,{timeout:15000});
   const failed=p=>p.waitForFunction(()=>document.querySelector('#connect-github').title.includes('GitHub could not be verified'));
   const focus=p=>p.evaluate(()=>window.dispatchEvent(new Event('focus')));
-  const groups=()=>page.locator('#writing-nav').evaluate(nav=>{let group;const result={};for(const el of nav.children){if(el.classList.contains('nav-date'))result[group=el.textContent]=[];else result[group].push(el.firstChild.textContent);}return result;});
+  const groups=()=>page.locator('#writing-nav').evaluate(nav=>{let group;const result={};for(const el of nav.children){if(el.classList.contains('nav-date'))result[group=el.textContent]=[];else if(el.tagName==='BUTTON')result[group].push(el.firstChild.textContent);}return result;});
   const removedWriting=()=>cloud.deleted.filter(id=>['live','legacy','edited','clean'].includes(id)).sort();
   await page.goto(url);await failed(page);await stale.goto(url);await failed(stale);
   await staleContext.setOffline(true);

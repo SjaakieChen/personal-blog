@@ -40,11 +40,13 @@ const server=http.createServer(async(req,res)=>{
  try{
   const context=await browser.newContext(),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   const origin='http://127.0.0.1:'+server.address().port;
-  const groups=()=>page.locator('#writing-nav').evaluate(nav=>{let group;const result={};for(const el of nav.children){if(el.classList.contains('nav-date'))result[group=el.textContent]=[];else result[group].push(el.firstChild.textContent);}return result;});
+  const groups=()=>page.locator('#writing-nav').evaluate(nav=>{let group;const result={};for(const el of nav.children){if(el.classList.contains('nav-date'))result[group=el.textContent]=[];else if(el.tagName==='BUTTON')result[group].push(el.firstChild.textContent);}return result;});
+  const categories=()=>page.locator('#writing-nav').evaluate(nav=>{let category;const result={};for(const el of nav.children){if(el.classList.contains('nav-category'))result[category=el.textContent]=[];else if(el.dataset.writingState==='published')result[category].push(el.firstChild.textContent);}return result;});
   const green=()=>page.waitForFunction(()=>document.querySelector('#connect-github').dataset.connected==='true');
   const inGroup=async(title,group)=>{await page.waitForFunction(({title,group})=>{let label;return [...document.querySelector('#writing-nav').children].some(el=>{if(el.classList.contains('nav-date'))label=el.textContent;return el.tagName==='BUTTON' && el.firstChild.textContent===title && label===group;});},{title,group});};
   await page.goto(origin+'/write/');await green();
   assert.deepEqual(await groups(),{Drafts:['New writing'],Edits:[],Published:['About me','Live post']});
+  assert.deepEqual(await categories(),{Blog:['About me','Live post']},'empty Archive subgroup is hidden');
   assert.equal(cloud.drafts.find(d=>d.id==='legacy').doc[0].runs[0].text,'Original words.');
   await page.getByRole('button',{name:'Live post',exact:true}).click();await green();await inGroup('Live post','Published');
   assert.equal(await page.locator('#delete-draft').isVisible(),false);
@@ -86,9 +88,16 @@ const server=http.createServer(async(req,res)=>{
   await page.reload();await green();await inGroup('New writing','Published');
   assert.equal((await groups()).Drafts.length,0);assert.equal((await groups()).Edits.length,0);
   await page.locator('#new-draft').click();await page.locator('#kind').selectOption('page');await page.locator('#title').fill('Appendix');await page.locator('#body').fill('Supporting material.');
+  assert.equal(await page.locator('#writing-nav [data-writing-state="drafts"]').filter({hasText:'Appendix'}).locator('.draft-label').textContent(),'Archive');
   await page.locator('#publish').click();await inGroup('Appendix','Published');await green();
   assert.match(await page.locator('#view-published').getAttribute('href'),/\/personal-blog\/appendix-[\w-]+\/$/);
   await page.reload();await green();await inGroup('Appendix','Published');
+  entries.push({kind:'page',title:'Older archive',path:'pages/older.md',sourceSha:'e'.repeat(40),publishedAt:'2026-10-01T10:00:00Z',permalink:'/older/',html:'<p>Older material.</p>'},{kind:'page',title:'Newer archive',path:'pages/newer.md',sourceSha:'f'.repeat(40),publishedAt:'2026-10-03T10:00:00Z',permalink:'/newer/',html:'<p>Newer material.</p>'});
+  await page.reload();await green();
+  assert.deepEqual(await categories(),{Blog:['New writing','About me','Live post'],Archive:['Appendix','Newer archive','Older archive']},'Published separates kinds and sorts newest within each');
+  assert.equal(await page.locator('#writing-nav [data-writing-state="published"] .draft-label').count(),0,'Published category labels replace repeated Archive badges');
+  await page.locator('#body').fill('Unpublished archive change.');await green();await inGroup('Appendix','Edits');
+  assert.equal(await page.locator('#writing-nav [data-writing-state="edits"]').filter({hasText:'Appendix'}).locator('.draft-label').textContent(),'Archive');
   // The feed is a single document; a permalink sidebar returns to that feed.
   const reader=await context.newPage();await reader.goto(origin+'/');const pages=context.pages().length;
   await reader.locator('.sidebar').getByRole('link',{name:'Two',exact:true}).click();

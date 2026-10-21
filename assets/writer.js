@@ -413,9 +413,12 @@
       });
     }
     heading('Published');
-    [...published].sort(newestFirst('publishedAt')).forEach(entry=>{
-      item(entry.title,'published:'+entry.path,()=>openPublished(entry),entry.kind==='page'?'Archive':null);
-    });
+    for(const [kind,label] of [['post','Blog'],['page','Archive']]) {
+      const entries=published.filter(entry=>entry.kind===kind).sort(newestFirst('publishedAt'));
+      if(!entries.length)continue;
+      const category=document.createElement('span');category.className='nav-category';category.textContent=label;nav.append(category);
+      entries.forEach(entry=>item(entry.title,'published:'+entry.path,()=>openPublished(entry)));
+    }
     sidebar.scrollTop=scroll;
   }
   function timestamp(entry) {

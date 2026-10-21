@@ -307,6 +307,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, read_drafts())
             if path == '/writing-index.json':
                 return self.send(200, writing_index())
+            if path == '/assets/evidence/media.json':
+                return self.send(200, json.loads((ROOT/'_data/evidence.json').read_text(encoding='utf-8')))
             if path == '/api/deployment':
                 commit = parse_qs(urlsplit(self.path).query).get('commit', [''])[0]
                 if not re.fullmatch(r'[a-f0-9]{40}', commit):
@@ -325,7 +327,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, html.encode(), 'text/html; charset=utf-8')
             if path == '/styles.css' or re.fullmatch(r'/assets/[a-zA-Z0-9_./-]+', path):
                 file = (ROOT/path.lstrip('/')).resolve()
-                if ROOT.resolve() in file.parents and file.is_file() and file.suffix in ('.css', '.js', '.woff2'):
+                if ROOT.resolve() in file.parents and file.is_file() and file.suffix in ('.css', '.js', '.woff2', '.webp', '.png', '.jpg', '.jpeg'):
                     return self.send(200, file.read_bytes(), mimetypes.guess_type(file)[0] or 'application/octet-stream')
             return self.send(404, {'error': 'Not found.'})
         except Exception:
