@@ -1,6 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {youtubeId, imageURL, pdfManifest, knownPdf} = require('../assets/evidence-media');
+const {youtubeId, imageURL, demoURL, pdfManifest, knownPdf} = require('../assets/evidence-media');
+
+test('interactive demos accept only same-site evidence entry documents', () => {
+  const base = 'https://private.example:8446/write/', entry = '/assets/evidence/drafts/demos/imec-alignment/index.html';
+  assert.equal(demoURL(entry, base), 'https://private.example:8446' + entry);
+  assert.equal(demoURL(entry + '?v=1#view', base), 'https://private.example:8446' + entry);
+  assert.equal(demoURL('/personal-blog/assets/evidence/demos/imec-alignment/index.html', 'https://public.example/personal-blog/posts/one/', 'https://public.example/personal-blog/'), 'https://public.example/personal-blog/assets/evidence/demos/imec-alignment/index.html');
+  assert.equal(demoURL(entry, 'http://127.0.0.1:8787/write/'), 'http://127.0.0.1:8787' + entry);
+  for (const value of ['https://external.example' + entry, 'https://user@private.example:8446' + entry, 'http://private.example:8446' + entry, '/assets/evidence/other/index.html', '/assets/evidence/drafts/demos/imec-alignment/demo.js', '/assets/evidence/drafts/demos/imec-alignment/../secret.html', '/assets/evidence/drafts/demos/nested/name/index.html', '/write/', 'data:text/html,hello', null]) assert.equal(demoURL(value, base), null, String(value));
+  assert.equal(demoURL(entry, 'http://private.example:8446/write/'), null);
+});
 
 test('direct image links stay inside this site evidence assets and deduplicate URL fragments', () => {
   const base = 'https://private.example:8446/write/', image = '/assets/evidence/drafts/imec/alignment.webp';

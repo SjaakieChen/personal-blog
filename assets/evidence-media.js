@@ -2,6 +2,21 @@
   'use strict';
   const scriptSource = root.document?.currentScript?.src;
   const siteBase = scriptSource ? new URL('../', scriptSource).href : null;
+  const demoCleanup = new WeakMap();
+
+  function demoURL(value, base, assetBase) {
+    if (typeof value !== 'string' || /[\\\s<>]/.test(value)) return null;
+    try {
+      const current = new URL(base), url = new URL(value, current);
+      const assets = new URL('assets/evidence/', assetBase || new URL('/', current));
+      const localHTTP = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
+      if ((url.protocol !== 'https:' && !localHTTP) || url.origin !== current.origin
+          || assets.origin !== current.origin || url.username || url.password || !url.pathname.startsWith(assets.pathname)) return null;
+      if (!/^(?:drafts\/)?demos\/[A-Za-z0-9_-]+\/index\.html$/.test(url.pathname.slice(assets.pathname.length))) return null;
+      url.search = '';url.hash = '';
+      return url.href;
+    } catch { return null; }
+  }
 
   function imageURL(value, base, assetBase) {
     if (typeof value !== 'string' || /[\\\s<>]/.test(value)) return null;
@@ -71,12 +86,67 @@
       if (link.closest('.references, [data-references], .explanation-notes, [data-notes]')) continue;
       const value = link.getAttribute('href'), id = youtubeId(value);
       const image = imageURL(value, body.ownerDocument.baseURI, siteBase);
+      const demo = demoURL(value, body.ownerDocument.baseURI, siteBase);
       const item = id ? {type: 'video', key: 'video:' + id, id, title: link.textContent.trim() || 'YouTube video'}
         : image ? {type: 'image', key: 'image:' + image, url: image, title: link.textContent.trim() || 'Project screenshot'}
+        : demo ? {type: 'demo', key: 'demo:' + demo, url: demo, title: link.textContent.trim() || 'Interactive emulator'}
         : knownPdf(value, entries, body.ownerDocument.baseURI);
       if (item && !media.has(item.key)) media.set(item.key, item);
     }
     return [...media.values()];
+  }
+
+  function createDemo(doc, block, item) {
+    block.className = 'evidence-demo';block.dataset.state = 'idle';
+    const view = doc.defaultView, stage = doc.createElement('div'), controls = doc.createElement('div');
+    const load = doc.createElement('button'), unload = doc.createElement('button'), fullscreen = doc.createElement('button');
+    const open = doc.createElement('a'), status = doc.createElement('p'), caption = doc.createElement('figcaption');
+    stage.className = 'evidence-demo-stage';controls.className = 'evidence-demo-controls';
+    for (const button of [load, unload, fullscreen]) button.type = 'button';
+    load.textContent = 'Load emulator';unload.textContent = 'Unload';fullscreen.textContent = 'Fullscreen';
+    unload.hidden = true;fullscreen.hidden = true;
+    open.textContent = 'Open emulator';open.href = item.url;open.target = '_blank';open.rel = 'noopener noreferrer';
+    status.className = 'evidence-demo-status';status.setAttribute('role', 'status');
+    status.textContent = 'Loads only when you choose to open it.';caption.textContent = item.title;
+    controls.append(load, unload, fullscreen, open);block.append(stage, controls, status, caption);
+    function stop() {
+      demoCleanup.get(block)?.();demoCleanup.delete(block);stage.replaceChildren();
+      unload.hidden = true;fullscreen.hidden = true;load.hidden = false;load.disabled = false;
+    }
+    unload.addEventListener('click', () => {
+      stop();block.dataset.state = 'idle';load.textContent = 'Load emulator';
+      status.textContent = 'Emulator unloaded.';
+    });
+    fullscreen.addEventListener('click', async () => {
+      try { await block.requestFullscreen(); }
+      catch { status.textContent = 'Fullscreen is unavailable. Use Open emulator for a separate tab.'; }
+    });
+    load.addEventListener('click', () => {
+      stop();block.dataset.state = 'loading';load.disabled = true;load.textContent = 'Loading…';
+      unload.hidden = false;status.textContent = 'Loading emulator…';
+      const frame = doc.createElement('iframe');
+      frame.title = caption.textContent;frame.setAttribute('sandbox', 'allow-scripts');
+      frame.referrerPolicy = 'no-referrer';frame.allow = 'fullscreen';frame.allowFullscreen = true;
+      let timer;
+      const fail = () => {
+        stop();block.dataset.state = 'error';load.textContent = 'Retry';
+        status.textContent = 'Emulator could not load. Retry or open it in a separate tab.';
+      };
+      const receive = event => {
+        if (event.source !== frame.contentWindow) return;
+        if (event.data?.type === 'blog-demo-ready') {
+          view.clearTimeout(timer);block.dataset.state = 'ready';load.hidden = true;fullscreen.hidden = false;
+          status.textContent = 'Emulator ready.';
+        } else if (event.data?.type === 'blog-demo-error') fail();
+      };
+      view.addEventListener('message', receive);frame.addEventListener('error', fail);
+      timer = view.setTimeout(fail, 20000);
+      demoCleanup.set(block, () => {
+        view.clearTimeout(timer);view.removeEventListener('message', receive);frame.removeEventListener('error', fail);
+      });
+      // The entry document and all of its scripts start loading only here.
+      frame.src = item.url;stage.append(frame);
+    });
   }
 
   function createMedia(doc, item) {
@@ -94,6 +164,8 @@
       const caption = doc.createElement('figcaption');
       caption.textContent = item.title;
       block.append(frame, caption);
+    } else if (item.type === 'demo') {
+      createDemo(doc, block, item);
     } else if (item.type === 'image') {
       block.className = 'evidence-image';
       const link = doc.createElement('a'), image = doc.createElement('img'), caption = doc.createElement('figcaption');
@@ -133,12 +205,18 @@
         block.querySelector('img').alt = item.title;
         block.querySelector('a').setAttribute('aria-label', 'Open full-size image: ' + item.title);
         block.querySelector('figcaption').textContent = item.title;
+      } else if (item.type === 'demo') {
+        block.querySelector('figcaption').textContent = item.title;
+        const frame = block.querySelector('iframe');
+        if (frame) frame.title = item.title;
       }
       blocks.push(block);
     }
     // Preserve live frames across editor redraws and text edits. Neither the
     // editable HTML nor the serialized document gains media nodes.
-    available.filter(block => !blocks.includes(block)).forEach(block => block.remove());
+    available.filter(block => !blocks.includes(block)).forEach(block => {
+      demoCleanup.get(block)?.();demoCleanup.delete(block);block.remove();
+    });
     blocks.forEach((block, index) => {
       if (pane.children[index] !== block) pane.insertBefore(block, pane.children[index] || null);
     });
@@ -179,7 +257,7 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, pdfManifest, knownPdf, mediaIn, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, demoURL, pdfManifest, knownPdf, mediaIn, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;

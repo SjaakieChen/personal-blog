@@ -26,6 +26,47 @@ class PublishingTests(unittest.TestCase):
             handler.do_GET()
         return status[0], headers, handler.wfile.getvalue()
 
+    def test_private_demo_exact_files_auth_and_isolated_headers(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(publisher, 'STATE', Path(directory)):
+            folder = Path(directory)/'demos/example'
+            folder.mkdir(parents=True)
+            prefix = '/assets/evidence/drafts/demos/example/'
+            for name, mime in publisher.DEMO_TYPES.items():
+                with self.subTest(name=name):
+                    content = ('Fixture '+name).encode()
+                    (folder/name).write_bytes(content)
+                    status, headers, body = self.media_get(prefix+name)
+                    self.assertEqual((status, body), (200, content))
+                    self.assertEqual(headers['Content-Type'], mime)
+                    self.assertEqual(headers['Cache-Control'], 'no-store')
+                    policy = headers['Content-Security-Policy']
+                    self.assertIn('sandbox allow-scripts;', policy)
+                    self.assertNotIn('allow-same-origin', policy)
+                    self.assertIn("connect-src 'none'", policy)
+                    self.assertIn('script-src https://private.example:8446', policy)
+                    self.assertIn("frame-ancestors 'self'", policy)
+                    for who, host in [('', 'private.example:8446'), ('other@example.com', 'private.example:8446'), ('owner@example.com', 'wrong.example:8446')]:
+                        self.assertEqual(self.media_get(prefix+name, who, host)[0], 403)
+            (folder/'provenance.json').write_text('{}')
+            (Path(directory)/'drafts.json').write_text('{"private":"state"}')
+            for path in [prefix, prefix+'provenance.json', prefix+'nested/demo.js', prefix+'../../drafts.json', prefix+'%2e%2e/demo.js', prefix+'../example/index.html', '/assets/evidence/drafts/demos/missing/index.html']:
+                self.assertEqual(self.media_get(path)[0], 404, path)
+            _, headers, _ = self.media_get('/missing')
+            self.assertIn("frame-ancestors 'none'", headers['Content-Security-Policy'])
+            self.assertIn("frame-src 'self' https://www.youtube-nocookie.com", headers['Content-Security-Policy'])
+
+    def test_private_demo_cannot_follow_symlink_outside_demo_directory(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(publisher, 'STATE', Path(directory)):
+            state = Path(directory)
+            (state/'demos/example').mkdir(parents=True)
+            outside = state/'outside.js'
+            outside.write_bytes(b'private state fixture')
+            try:
+                (state/'demos/example/demo.js').symlink_to(outside)
+            except OSError:
+                self.skipTest('Creating symlinks is unavailable on this host')
+            self.assertEqual(self.media_get('/assets/evidence/drafts/demos/example/demo.js')[0], 404)
+
     def test_private_manifest_and_media_use_authenticated_real_response_serialization(self):
         with tempfile.TemporaryDirectory() as directory:
             root, state = Path(directory)/'source', Path(directory)/'state'
@@ -83,7 +124,7 @@ class PublishingTests(unittest.TestCase):
 
     def test_publish_rejects_private_attachment_links_before_any_github_request(self):
         prefix = publisher.PRIVATE_MEDIA_PREFIX
-        for link in [publisher.ORIGIN+prefix+'ib/paper.pdf', prefix+'ib/paper.pdf', prefix.replace('/', '%2F')+'ib/paper.pdf', prefix.replace('/', '&#47;')+'ib/paper.pdf', (publisher.ORIGIN+prefix+'ib/paper.pdf').replace('/', '\\/')]:
+        for link in [publisher.ORIGIN+prefix+'ib/paper.pdf', prefix+'ib/paper.pdf', prefix.replace('/', '%2F')+'ib/paper.pdf', prefix.replace('/', '&#47;')+'ib/paper.pdf', (publisher.ORIGIN+prefix+'ib/paper.pdf').replace('/', '\\/'), prefix+'demos/example/index.html', publisher.ORIGIN+prefix+'demos/example/index.html']:
             with self.subTest(link=link), patch.object(publisher, 'gh_api') as api:
                 with self.assertRaisesRegex(ValueError, 'Promote the attachment'):
                     publisher.publish({'path': 'pages/private.md', 'content': '---\ntitle: "Private"\n---\n<p><a href="'+link+'">Paper</a></p>'})

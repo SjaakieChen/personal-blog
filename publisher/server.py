@@ -30,6 +30,8 @@ entry_cache = {}
 index_lock = threading.Lock()
 draft_lock = threading.Lock()
 PRIVATE_MEDIA_PREFIX = '/assets/evidence/drafts/'
+PRIVATE_DEMO_PREFIX = PRIVATE_MEDIA_PREFIX+'demos/'
+DEMO_TYPES = {'index.html': 'text/html; charset=utf-8', 'demo.js': 'application/javascript; charset=utf-8', 'demo.css': 'text/css; charset=utf-8'}
 MEDIA_TYPES = {'.pdf': 'application/pdf', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg'}
 
 
@@ -51,6 +53,18 @@ def private_media_file(path):
     root = (STATE/'media').resolve()
     file = (root/relative).resolve()
     return file if root in file.parents and file.is_file() else None
+
+
+def private_demo_file(path):
+    if not path.startswith(PRIVATE_DEMO_PREFIX):
+        return None
+    relative = path[len(PRIVATE_DEMO_PREFIX):]
+    if not re.fullmatch(r'[a-zA-Z0-9_-]+/(?:index\.html|demo\.js|demo\.css)', relative):
+        return None
+    state = STATE.resolve()
+    root = (state/'demos').resolve()
+    file = (root/relative).resolve()
+    return file if state in root.parents and root in file.parents and file.is_file() else None
 
 
 def read_drafts():
@@ -304,7 +318,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass  # Never log auth codes, post contents, or request query strings.
 
-    def send(self, status, body, content_type='application/json; charset=utf-8', filename=None):
+    def send(self, status, body, content_type='application/json; charset=utf-8', filename=None, demo=False):
         raw = json.dumps(body).encode() if content_type.startswith('application/json') else body
         self.send_response(status)
         self.send_header('Content-Type', content_type)
@@ -314,7 +328,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        policy = (f"sandbox allow-scripts; default-src 'none'; script-src {ORIGIN}; style-src {ORIGIN}; img-src {ORIGIN} data:; connect-src 'none'; object-src 'none'; frame-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'" if demo else
+                  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self' https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.send_header('Content-Security-Policy', policy)
         self.end_headers()
         self.wfile.write(raw)
 
@@ -338,6 +354,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, writing_index())
             if path == '/assets/evidence/media.json':
                 return self.send(200, media_manifest())
+            if path.startswith(PRIVATE_DEMO_PREFIX):
+                file = private_demo_file(path)
+                if file is None:
+                    return self.send(404, {'error': 'Not found.'})
+                return self.send(200, file.read_bytes(), DEMO_TYPES[file.name], demo=True)
             if path.startswith(PRIVATE_MEDIA_PREFIX):
                 file = private_media_file(path)
                 if file is None:
