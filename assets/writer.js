@@ -30,7 +30,7 @@
   function leavePublishedPreview(){publishedPreview=null;previewPath='';sessionStorage.removeItem(key+'-published-preview');}
   const privateOrigin='https://yoga-jiaqi.taile0df21.ts.net:8446';
   const isPrivate=document.body.dataset.privateDesk==='true';
-  let publishing=false, authPolling=false, pendingPublishId=null;
+  let publishing=false, authPolling=false, pendingPublishId=null, publicationRevision=0;
   const cloudBaseKey=syncKey+'-yoga-base';
   let cloudBase={drafts:[],deleted:[]}, cloudSynced='', syncTimer, syncDue=0, syncing=false, syncAgain=false, syncFailures=0, syncError='', githubHealthy=false;
   const syncTimeout=45000;
@@ -174,17 +174,20 @@
     }catch(error){connectionStatus(false);publicationStatus(error.message,'Connection needed');}
     finally{authPolling=false;$('connect-github').disabled=false;}
   }
-  async function watchDeployment(commit,title,removed=false) {
+  async function watchDeployment(commit,title,removed=false,draftId=current()?.id,revision=publicationRevision) {
+    const ownsStatus=()=>current()?.id===draftId && revision===publicationRevision;
     for(let attempt=0;attempt<36;attempt++) {
       await new Promise(resolve=>setTimeout(resolve,5000));
+      if(!ownsStatus())return;
       try {
-        const result=await api('/api/deployment?commit='+encodeURIComponent(commit));
+        const result=await api('/api/deployment?commit='+encodeURIComponent(commit),undefined,syncTimeout);
+        if(!ownsStatus())return;
         if(result.status==='completed') {
           publicationStatus(result.conclusion==='success'?'“'+title+'” '+(removed?'has been removed from the public blog.':'is live.'):result.conclusion==='cancelled'?'Saved to GitHub. A newer site update replaced this build.':'Saved to GitHub, but the site build failed. Your writing is safe in GitHub.',result.conclusion==='success'?(removed?'Deleted':'Published'):'Saved to GitHub');
           if(result.conclusion==='success')refreshIndex();
           return;
         }
-      }catch{publicationStatus('Saved to GitHub. Deployment status is unavailable; the site may still be updating.','Saved to GitHub');return;}
+      }catch{if(ownsStatus())publicationStatus('Saved to GitHub. Deployment status is unavailable; the site may still be updating.','Saved to GitHub');return;}
     }
     publicationStatus('Saved to GitHub. The site is still updating; check the blog shortly.','Saved to GitHub');
   }
@@ -195,7 +198,7 @@
       changed();if(titleConflict)throw new Error(titleConflict);
       let d=current();publishingDraft=d;core.prepare(d);
       if(!isPrivate){handoff(true);return;}
-      publishing=true;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
+      publishing=true;publicationRevision++;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
       const session=await api('/api/session');
       connectionStatus(session.connected);
       if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
@@ -231,10 +234,12 @@
       published=[entry,...published.filter(p=>p.path!==entry.path)];indexRequest++;
       await save();refreshIndex();renderNav();if(current()?.id===submitted.id){timestamp(current());$('kind').disabled=true;updateDeleteButton();}
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
-      $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(saved.kind==='page'?saved.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
-      publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
-      if(result.commit)watchDeployment(result.commit,submitted.title);
-    }catch(error){if(error.status===409 && publishingDraft){const live=drafts.find(d=>d.id===publishingDraft.id);if(live)live.conflict=true;save();refreshIndex();}publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
+      if(current()?.id===submitted.id) {
+        $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(saved.kind==='page'?saved.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
+        publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
+      }
+      if(result.commit)watchDeployment(result.commit,submitted.title,false,submitted.id);
+    }catch(error){if(error.status===409 && publishingDraft){const live=drafts.find(d=>d.id===publishingDraft.id);if(live)live.conflict=true;save();refreshIndex();}if(!publishingDraft || current()?.id===publishingDraft.id)publicationStatus(error.message || 'Publishing failed. Your draft is still saved.','Not published');}
     finally{publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';updateDeleteButton();}
   }
   function updateDeleteButton() {
@@ -282,7 +287,7 @@
       $('save-status').textContent=entry?'Unpublished edits discarded.':'Draft deleted.';
       return;
     }
-    publishing=true;$('publish').disabled=true;updateDeleteButton();$('view-published').hidden=true;
+    publishing=true;publicationRevision++;$('publish').disabled=true;updateDeleteButton();$('view-published').hidden=true;
     try {
       publicationStatus('Removing “'+target.title+'” from GitHub…','Deleting');
       const result=await api('/api/delete',{path:target.path,baseSha:target.sha});
@@ -440,7 +445,10 @@
     for(const id of ['title','quote','body']){$(id).contentEditable=publishedPreview?'false':id==='body'?'true':'plaintext-only';$(id).setAttribute('aria-readonly',String(!!publishedPreview));}
     for(const button of document.querySelectorAll('[data-command],#add-reference,#add-note,#restore'))button.disabled=!!publishedPreview;
     $('publish').hidden=!!publishedPreview;$('resume-edits').hidden=!publishedPreview;$('published-version').hidden=!publishedPreview;
-    $('publish-panel').hidden=true;$('view-published').hidden=true;if(replaceBody)selectionRange=null;timestamp(d);empties();renderNav();
+    // Background sync can refresh publication metadata without changing the
+    // selected writing. Keep its result and public link visible through that.
+    if(!preserveEditing){$('publish-panel').hidden=true;$('view-published').hidden=true;}
+    if(replaceBody)selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
     updateDeleteButton();
   }

@@ -6,13 +6,14 @@ const root=path.resolve(__dirname,'..'),core=require('../assets/writer-core');
 const make=(id,title,text)=>({id,kind:'post',title,quote:'',doc:[{runs:[{text}]}],createdAt:'2026-10-01T10:00:00Z',updatedAt:'2026-10-01T10:00:00Z'});
 let cloud={revision:0,drafts:[make('new','New writing','A draft.'),make('legacy','About me','Original words.')],deleted:[]};
 let entries=[{kind:'post',title:'Live post',path:'_posts/2026-10-01-live.md',sourceSha:'a'.repeat(40),publishedAt:'2026-10-01T10:00:00Z',date:'2026-10-01T10:00:00Z',html:'<p>Published words.</p>'},{kind:'post',title:'About me',path:'_posts/2026-10-02-about.md',sourceSha:'b'.repeat(40),publishedAt:'2026-10-02T10:00:00Z',date:'2026-10-02T10:00:00Z',html:'<p>Original words.</p>'}];
-let pendingPublish,delayPublish=false,failIndex=false;
+let pendingPublish,delayPublish=false,failIndex=false,nextPublishCommit=false,pendingDeployment,deploymentRequested,failPublish=false;
 function completePublish(res,data){
  const [,front,html]=data.content.split('---\n'),meta={};
  for(const line of front.trim().split('\n')){const i=line.indexOf(':');if(i<0)continue;try{meta[line.slice(0,i)]=JSON.parse(line.slice(i+1));}catch{meta[line.slice(0,i)]=line.slice(i+1).trim();}}
  const old=entries.find(e=>e.path===data.path),time=new Date().toISOString(),sha='c'.repeat(40);
  entries=[{kind:meta.layout,title:meta.title,quote:meta.quote,html,references:meta.references,notes:meta.notes,quoteReference:meta.quote_reference,quoteLocator:meta.quote_locator,referenceKey:meta.reference_key,path:data.path,sourceSha:sha,date:meta.date,permalink:meta.permalink,publishedAt:old?.publishedAt || time,editedAt:old?time:undefined},...entries.filter(e=>e.path!==data.path)];
- res.end(JSON.stringify({sha,time}));
+ const commit=nextPublishCommit?'d'.repeat(40):undefined;nextPublishCommit=false;
+ res.end(JSON.stringify({sha,time,commit}));
 }
 const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');res.setHeader('Content-Type','application/json');
@@ -22,7 +23,8 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='POST'){let raw='';for await(const chunk of req)raw+=chunk;const data=JSON.parse(raw);if(data.revision!==cloud.revision){res.writeHead(409);res.end('{"error":"Conflict"}');return;}cloud={...data,revision:cloud.revision+1};}
   res.end(JSON.stringify(cloud));return;
  }
- if(url.pathname==='/api/publish'){let raw='';for await(const chunk of req)raw+=chunk;const data=JSON.parse(raw);if(delayPublish)pendingPublish=()=>completePublish(res,data);else completePublish(res,data);return;}
+ if(url.pathname==='/api/publish'){let raw='';for await(const chunk of req)raw+=chunk;const data=JSON.parse(raw);if(failPublish){failPublish=false;res.writeHead(502);res.end('{"error":"GitHub could not accept this version."}');}else if(delayPublish)pendingPublish=()=>completePublish(res,data);else completePublish(res,data);return;}
+ if(url.pathname==='/api/deployment'){pendingDeployment=res;deploymentRequested?.();return;}
  if(req.method!=='GET'){res.writeHead(405);res.end('{}');return;}
  if(url.pathname==='/write/'){
   res.setHeader('Content-Type','text/html');res.end(fs.readFileSync(path.join(root,'write.html'),'utf8').replace(/^---[\s\S]*?---\s*/,'').replace(/\{\{\s*'([^']*)'\s*\|\s*relative_url\s*\}\}/g,'$1').replace(/\?v=\{\{[^}]*\}\}/g,'').replace('data-index="/writing-index.json"','data-index="/writing-index.json" data-private-desk="true"'));return;
@@ -74,9 +76,24 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('#body').textContent(),'Unpublished changes.');
   await page.getByRole('button',{name:'Discard edits',exact:true}).click();await page.locator('#confirm-delete').click();await green();await inGroup('Live post','Published');
   assert.equal(await page.locator('#body').textContent(),'Published words.');
+  nextPublishCommit=true;const deploymentRequest=new Promise(resolve=>{deploymentRequested=resolve;});
   await page.getByRole('button',{name:'New writing',exact:true}).click();await page.locator('#publish').click();
   await inGroup('New writing','Published');await green();
   assert.equal((await groups()).Drafts.includes('New writing'),false);
+  // Canonical GitHub metadata can arrive after the publish response. Refreshing
+  // that same writing must not erase its successful result or public-page link.
+  entries.find(e=>e.title==='New writing').editedAt='2026-10-22T10:00:00Z';
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await green();
+  assert.equal(await page.locator('#publish-panel').isVisible(),true,'background reconciliation preserves publication confirmation');
+  assert.match(await page.locator('#publication-status').textContent(),/Saved to GitHub/);
+  assert.equal(await page.locator('#view-published').isVisible(),true,'public page remains accessible after metadata refresh');
+  await deploymentRequest;
+  await page.getByRole('button',{name:'Live post',exact:true}).click();
+  const deploymentResponse=page.waitForResponse(r=>r.url().includes('/api/deployment'));
+  pendingDeployment.end('{"status":"completed","conclusion":"success"}');await (await deploymentResponse).finished();
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  assert.equal(await page.locator('#publish-panel').isVisible(),false,'a previous draft deployment must not overwrite the current draft status');
+  await page.getByRole('button',{name:'New writing',exact:true}).click();
   await page.locator('#body').fill('Later revision.');await green();await inGroup('New writing','Edits');
   delayPublish=true;const requested=page.waitForRequest(r=>r.url().endsWith('/api/publish'));await page.locator('#publish').click();await requested;
   await page.locator('#body').fill('Typed while publishing.');await green();
@@ -98,6 +115,15 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('#writing-nav [data-writing-state="published"] .draft-label').count(),0,'Published category labels replace repeated Archive badges');
   await page.locator('#body').fill('Unpublished archive change.');await green();await inGroup('Appendix','Edits');
   assert.equal(await page.locator('#writing-nav [data-writing-state="edits"]').filter({hasText:'Appendix'}).locator('.draft-label').textContent(),'Archive');
+  const privateBeforeFailure=structuredClone(cloud.drafts.find(d=>d.title==='Appendix'));
+  failPublish=true;await page.locator('#publish').click();
+  await page.waitForFunction(()=>document.querySelector('#publish-heading').textContent==='Not published');
+  entries.find(e=>e.title==='Appendix').editedAt='2026-10-22T11:00:00Z';
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await green();
+  assert.equal(await page.locator('#publish-panel').isVisible(),true,'failed publication stays visible after sync');
+  assert.equal(await page.locator('#publication-status').textContent(),'GitHub could not accept this version.');
+  assert.deepEqual(cloud.drafts.find(d=>d.id===privateBeforeFailure.id).doc,privateBeforeFailure.doc);
+  assert.equal(cloud.drafts.find(d=>d.id===privateBeforeFailure.id).sourceSha,privateBeforeFailure.sourceSha);
   // The feed is a single document; a permalink sidebar returns to that feed.
   const reader=await context.newPage();await reader.goto(origin+'/');const pages=context.pages().length;
   await reader.locator('.sidebar').getByRole('link',{name:'Two',exact:true}).click();
