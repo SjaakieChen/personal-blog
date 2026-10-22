@@ -126,6 +126,30 @@ test('route migration is explicit and a stale tab is remapped without losing new
  assert.equal(converted.sourceSha,entry.sourceSha);assert.ok(converted.savedVersions.length>0);
 });
 
+test('an old browser recovered draft reattaches without losing its new identity, prose or provenance',()=>{
+ const originalPage={...make('old-page','Research','Earlier published writing.'),kind:'page',sourcePath:'pages/research.md',sourceSha:'a'.repeat(40)};
+ const recovered={...make('recovered-id','Research','My still-unpublished writing.'),kind:'page',referenceKey:'old-page',references:[{id:'r',title:'Reference',url:'https://example.org'}],notes:[{id:'n',text:'Authored note'}],savedVersions:[originalPage],recoveredFrom:{id:originalPage.id,path:originalPage.sourcePath,sha:originalPage.sourceSha,at:'2026-10-22T16:00:00Z'}};
+ const entry={kind:'post',path:'_posts/2026-10-21-research.md',sourceSha:'b'.repeat(40),previousPaths:[originalPage.sourcePath],previousSourceSha:originalPage.sourceSha,permalink:'/evidence/research/',referenceKey:'old-page',date:'2026-10-21T12:00:00Z',publishedAt:'2026-10-21T12:00:00Z'};
+ const before=structuredClone(recovered),converted=migratePublished([recovered],[entry]).drafts[0];
+ assert.deepEqual(recovered,before,'recovery migration never mutates the original');
+ assert.equal(converted.id,recovered.id);assert.equal(converted.kind,'post');assert.equal(converted.sourcePath,entry.path);assert.equal(converted.sourceSha,entry.sourceSha);assert.equal(converted.permalink,entry.permalink);
+ for(const field of ['doc','title','quote','references','notes','referenceKey','savedVersions','recoveredFrom'])assert.deepEqual(converted[field],recovered[field],field);
+ assert.equal(converted.publishedFingerprint,undefined,'migration must not label private writing as the published baseline');
+ // reconcilePublished establishes the real current baseline, so genuine edits
+ // remain edits rather than being hidden by the routing repair.
+ const publishedBaseline=writing({...originalPage,kind:'post'});
+ assert.notEqual(writing({...converted,publishedFingerprint:publishedBaseline}),publishedBaseline);
+ const cleanup=reconcileMissing([converted],[entry.path],writing,()=>assert.fail('No second recovery identity'));
+ assert.deepEqual(cleanup.deleted,[]);assert.equal(cleanup.drafts[0].id,recovered.id);
+ for(const previousSourceSha of [undefined,'c'.repeat(40)]){
+   const stale=migratePublished([recovered],[{...entry,previousSourceSha}]).drafts[0];
+   assert.equal(stale.sourcePath,entry.path);
+   assert.equal(stale.sourceSha,originalPage.sourceSha,'stale recovered bases retain the conflict guard');
+ }
+ const alreadyLinked={...recovered,sourcePath:'_posts/different.md',sourceSha:'d'.repeat(40)};
+ assert.deepEqual(migratePublished([alreadyLinked],[entry,{path:alreadyLinked.sourcePath,kind:'post'}]).drafts,[alreadyLinked],'recovery provenance never overrides a current source');
+});
+
 test('invalid or ambiguous migration metadata cannot authorize orphan cleanup',()=>{
  const entry={path:'_posts/post.md',kind:'post',title:'Post',html:'<p>Text</p>',sourceSha:'a'.repeat(40),previousPaths:['pages/old.md'],previousSourceSha:'b'.repeat(40)};
  assert.equal(validPublishedIndex({posts:[entry],pages:[]},true),true);

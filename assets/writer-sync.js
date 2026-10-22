@@ -51,7 +51,10 @@
     const live=new Set(entries.map(entry=>entry.path)), paths=new Map();
     let changed=false;
     const migrated=drafts.map(draft=>{
-      const oldPath=draft.sourcePath || draft.targetPath;
+      // An older open tab may have recovered the removed page before loading
+      // this client. Its recorded source still identifies the explicit move.
+      const recovered=(!draft.sourcePath && !draft.targetPath)?draft.recoveredFrom:null;
+      const oldPath=draft.sourcePath || draft.targetPath || recovered?.path;
       if(!oldPath || live.has(oldPath))return draft;
       const matches=entries.filter(entry=>entry.previousPaths?.includes(oldPath));
       if(matches.length!==1)return draft;
@@ -59,7 +62,8 @@
       if(draft.targetPath)next.targetPath=entry.path;
       for(const [field,value] of Object.entries({permalink:entry.permalink,originalDate:entry.date,publishedAt:entry.publishedAt,editedAt:entry.editedAt}))if(value!=null)next[field]=value;
       // Only a known metadata-only move may translate the optimistic-lock base.
-      if(draft.sourceSha && draft.sourceSha===entry.previousSourceSha)next.sourceSha=entry.sourceSha;
+      const oldSha=draft.sourceSha || recovered?.sha;
+      if(oldSha)next.sourceSha=oldSha===entry.previousSourceSha?entry.sourceSha:oldSha;
       try {
         const fingerprint=JSON.parse(draft.publishedFingerprint);
         if(Array.isArray(fingerprint) && fingerprint[0]===draft.kind){fingerprint[0]=entry.kind;next.publishedFingerprint=JSON.stringify(fingerprint);}
