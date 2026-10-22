@@ -498,6 +498,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     let suppressClick = false, pendingClick = null;
     const progress = $("[data-progress]");
     updateProgress = () => {
+      // Older cached demo documents do not include this optional indicator.
+      if (!progress) return;
       const active = running && !document.hidden && !suspended;
       progress.dataset.running = String(active);
       progress.textContent = (active ? "" : "Paused · ") + engine.steps.toLocaleString() + " steps";
