@@ -33,6 +33,11 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .evidence-pdf { margin: 0; }
 .evidence-pdf figure { margin: 0 0 28px; }
 .evidence-pdf img { display: block; width: 100%; height: auto; border: 1px solid #dde0e1; }
+.evidence-pdf-carousel { margin-bottom: 28px; }
+.evidence-pdf-carousel figure { margin-bottom: 10px; }
+.evidence-pdf-controls { display: flex; align-items: center; justify-content: center; gap: 16px; font: 14px/1.5 system-ui,sans-serif; }
+.evidence-pdf-controls button { min-width: 44px; min-height: 44px; padding: 6px 12px; border: 1px solid #aab1b5; background: #fff; color: var(--blue); font: 22px/1 system-ui,sans-serif; cursor: pointer; }
+.evidence-pdf-controls button:disabled { color: #90979b; border-color: #dde0e1; cursor: default; }
 .post-media figcaption { margin-top: 6px; color: #5e666a; font-size: 14px; line-height: 1.5; }
 .evidence-pdf object { display: block; width: 100%; height: clamp(360px,70vh,900px); border: 1px solid #dde0e1; }
 .post-body pre { overflow: auto; font-size: 15px; }

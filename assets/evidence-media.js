@@ -209,6 +209,39 @@
     return block;
   }
 
+  function enhancePdf(block, item) {
+    // A full poster is one document to browse. Keep representative excerpts
+    // (such as pages 1, 10 and 16 of an essay) visible together as before.
+    if (block.classList.contains('evidence-pdf-carousel') || item.previews.length < 2
+        || item.totalPages !== item.previews.length || !item.pages.every((page, index) => page === index + 1)) return;
+    const slides = [...block.querySelectorAll(':scope > figure')];
+    if (slides.length !== item.previews.length) return;
+    const doc = block.ownerDocument, controls = doc.createElement('div');
+    const previous = doc.createElement('button'), next = doc.createElement('button'), status = doc.createElement('span');
+    block.classList.add('evidence-pdf-carousel');
+    block.setAttribute('role', 'group');block.setAttribute('aria-roledescription', 'carousel');
+    block.setAttribute('aria-label', item.title);
+    controls.className = 'evidence-pdf-controls';
+    previous.type = next.type = 'button';
+    previous.textContent = '←';next.textContent = '→';
+    previous.setAttribute('aria-label', 'Previous page');next.setAttribute('aria-label', 'Next page');
+    status.setAttribute('role', 'status');status.setAttribute('aria-live', 'polite');status.setAttribute('aria-atomic', 'true');
+    slides.forEach((slide, index) => {
+      slide.setAttribute('role', 'group');slide.setAttribute('aria-roledescription', 'slide');
+      slide.setAttribute('aria-label', 'Page ' + (index + 1) + ' of ' + slides.length);
+    });
+    let current = 0;
+    function show(index) {
+      current = index;
+      slides.forEach((slide, number) => { slide.hidden = number !== current; });
+      previous.disabled = current === 0;next.disabled = current === slides.length - 1;
+      status.textContent = 'Page ' + (current + 1) + ' of ' + slides.length;
+    }
+    previous.addEventListener('click', () => show(Math.max(0, current - 1)));
+    next.addEventListener('click', () => show(Math.min(slides.length - 1, current + 1)));
+    controls.append(previous, status, next);block.append(controls);show(0);
+  }
+
   function renderPane(body, pane, entries = []) {
     const available = [...pane.children];
     const blocks = [];
@@ -232,6 +265,10 @@
     // Reuse linked server-rendered media in source order, then retain any
     // unreferenced PDF or inline-media fallback after the linked items.
     blocks.push(...available.filter(block => block.hasAttribute('data-static-media') && !blocks.includes(block)));
+    for (const block of blocks) {
+      const item = entries.find(entry => entry.key === block.dataset.mediaKey);
+      if (item) enhancePdf(block, item);
+    }
     // Preserve live frames across editor redraws and text edits. Neither the
     // editable HTML nor the serialized document gains media nodes.
     available.filter(block => !blocks.includes(block)).forEach(block => {

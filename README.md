@@ -47,6 +47,8 @@ An ordinary same-site link to a PNG, JPEG or WebP under `assets/evidence/` also 
 
 Private draft media can supply an authenticated `download_url` in the private manifest; it takes precedence over `public_pdf`. Keep private files and their metadata in the publisher's private state, outside the public repository. For selected preview pages from a longer paper, provide a `preview_pages` array aligned with `previews` and the original `total_pages` count, for example `[1, 10, 16]` and `22`. Captions retain those original page numbers, and every preview opens the full PDF. Existing full-poster preview lists need no extra fields.
 
+Complete multi-page poster previews display as a single carousel with Previous/Next buttons and a page count. The selected page stays in place while editing text. Representative pages from longer papers remain visible together; without JavaScript all poster pages remain readable. The PDF download link is always available.
+
 The home feed collapses long posts with Show more / Show less; individual post pages always show the complete article. Clicking a citation expands a collapsed article before following its reference target. Without JavaScript, the full text is available.
 
 The main blog is a continuous feed, newest first. Sidebar links jump to a post in that feed in the same tab, including when starting from a standalone post URL. Post titles in the feed remain within that document. References to other pages and external sources still open separately.

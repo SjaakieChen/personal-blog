@@ -5,7 +5,7 @@ const http = require('node:http'), fs = require('node:fs'), path = require('node
 const root = path.resolve(__dirname, '..');
 const pdf = 'https://public.example/blog/assets/evidence/example/poster.pdf';
 const manifest = {'/evidence/example/': {pdf: '/assets/evidence/example/poster.pdf', public_pdf: pdf,
-  title: 'Example group project poster', previews: ['/assets/evidence/example/page-1.webp', '/assets/evidence/example/page-2.webp']},
+  title: 'Example group project poster', previews: [1, 2, 3].map(page => '/assets/evidence/example/page-' + page + '.webp')},
   '/private-example/': {pdf: '/assets/evidence/drafts/example/paper.pdf', download_url: '/assets/evidence/drafts/example/paper.pdf',
     title: 'Private example paper', previews: [1, 10, 16].map(page => '/assets/evidence/drafts/example/page-' + page + '.webp'),
     preview_pages: [1, 10, 16], total_pages: 22}};
@@ -16,7 +16,8 @@ const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.
   + '<p><a href="https://sjaakiechen.github.io.example.org/personal-blog/assets/evidence/example/knight.png">Unrelated host</a></p>';
 const screenshot = '/assets/evidence/drafts/imec/alignment.webp';
 const staticText = '<p><a href="' + ownPublicImage + '">Knight shadow</a></p><p><a href="' + pdf + '">Original poster PDF</a></p>';
-const staticPane = '<div id="original-pdf-block" class="evidence-pdf" data-media-key="pdf:/assets/evidence/example/poster.pdf" data-static-media><figure><a href="' + pdf + '"><img src="/assets/evidence/example/page-1.webp" alt="Server-rendered poster"></a><figcaption>Original poster</figcaption></figure></div>'
+const staticPane = '<div id="original-pdf-block" class="evidence-pdf" data-media-key="pdf:/assets/evidence/example/poster.pdf" data-static-media>'
+  + [1, 2, 3].map(page => '<figure><a href="' + pdf + '"><img src="/assets/evidence/example/page-' + page + '.webp" alt="Server-rendered poster, page ' + page + '"></a><figcaption>Original poster · ' + page + ' / 3</figcaption></figure>').join('') + '</div>'
   + '<div data-media-key="inline:fallback" data-static-media><img src="/assets/evidence/example/page-2.webp" alt="Unreferenced fallback"></div>';
 const text = '<p>See the <a class="text-citation" data-reference="demo" data-label="demo" href="https://www.youtube.com/watch?v=Abc_123-Xyz">demo</a> for the alignment procedure.</p>'
   + '<p><a href="https://youtu.be/Abc_123-Xyz">Another link to the same demo</a>.</p>'
@@ -61,7 +62,22 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('#body').innerHTML(), text, 'editable HTML and source links are unchanged');
     assert.equal(await page.locator('#body iframe, #body img').count(), 0, 'media never enters saved rich text');
     assert.equal(await page.locator('.post-media iframe').count(), 1, 'inline and named citation links deduplicate');
-    assert.equal(await page.locator('.post-media .evidence-pdf img').count(), 2);
+    assert.equal(await page.locator('.post-media .evidence-pdf img').count(), 3);
+    const carousel = page.locator('.evidence-pdf-carousel');
+    await carousel.waitFor();
+    assert.equal(await carousel.getAttribute('aria-roledescription'), 'carousel');
+    assert.equal(await carousel.getAttribute('aria-label'), 'Example group project poster');
+    assert.equal(await carousel.locator('figure:visible').count(), 1, 'one poster page is visible');
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 1 of 3');
+    assert.equal(await carousel.getByRole('button', {name: 'Previous page'}).isDisabled(), true);
+    await carousel.getByRole('button', {name: 'Next page'}).click();
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3');
+    assert.equal(await carousel.locator('figure:visible img').getAttribute('src'), origin + '/assets/evidence/example/page-2.webp');
+    await carousel.getByRole('button', {name: 'Next page'}).press('Enter');
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 3 of 3');
+    assert.equal(await carousel.getByRole('button', {name: 'Next page'}).isDisabled(), true);
+    await carousel.getByRole('button', {name: 'Previous page'}).press('Space');
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3', 'native controls work from the keyboard');
     assert.equal(await page.locator('.post-media .evidence-image img').count(), 1, 'ordinary image links deduplicate; external images do not embed');
     assert.equal(await page.locator('.evidence-image img').getAttribute('src'), origin + screenshot);
     assert.equal(await page.locator('.evidence-image img').getAttribute('alt'), 'Camera-guided placement');
@@ -82,6 +98,8 @@ const server = http.createServer((req, res) => {
     await page.locator('#body').evaluate(body => { body.innerHTML += '<p>Additional explanation.</p>'; });
     await page.waitForFunction(() => document.querySelector('#body > p:last-child').textContent === 'Additional explanation.');
     assert.equal(await page.evaluate(() => originalFrame === document.querySelector('iframe')), true, 'editor redraw preserves playback');
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3', 'editor redraw preserves the selected poster page');
+    assert.equal(await carousel.locator('.evidence-pdf-controls').count(), 1, 'editor redraw never duplicates controls');
     await page.locator('#body a').first().evaluate(anchor => { anchor.textContent = 'Updated demo'; });
     await page.waitForFunction(() => document.querySelector('iframe').title === 'Updated demo');
     assert.equal(await page.evaluate(() => originalFrame === document.querySelector('iframe')), true, 'caption edit preserves playback');
@@ -104,6 +122,8 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('.evidence-image a').getAttribute('href'), origin + '/assets/evidence/example/knight.png');
     assert.equal(await page.locator('.evidence-image figcaption').textContent(), 'Knight shadow');
     assert.equal(await page.locator('.evidence-pdf img').count(), 3, 'only representative pages are shown');
+    assert.equal(await page.locator('.evidence-pdf-carousel').count(), 0, 'representative essay previews stay stacked');
+    assert.equal(await page.locator('.evidence-pdf figure:visible').count(), 3);
     assert.deepEqual(await page.locator('.evidence-pdf img').evaluateAll(images => images.map(image => image.alt)),
       [1, 10, 16].map(number => 'Private example paper, page ' + number + ' of 22'));
     assert.deepEqual(await page.locator('.evidence-pdf figcaption').allTextContents(),
@@ -144,6 +164,10 @@ const server = http.createServer((req, res) => {
     const mediaOrder = () => page.locator('.post-media > [data-media-key]').evaluateAll(blocks => blocks.map(block => block.dataset.mediaKey));
     assert.deepEqual(await mediaOrder(), [linkedImageKey, pdfKey, 'inline:fallback'], 'linked static PDF follows the photo in body order');
     assert.equal(await page.locator('#original-pdf-block').count(), 1, 'existing server-rendered PDF is reused');
+    assert.equal(await page.locator('#original-pdf-block.evidence-pdf-carousel').count(), 1, 'public static PDF gains the same carousel');
+    assert.equal(await carousel.locator('figure:visible').count(), 1);
+    await carousel.getByRole('button', {name: 'Next page'}).click();
+    assert.equal(await carousel.locator('figure:visible a').getAttribute('href'), pdf, 'poster page still opens the original PDF');
     assert.equal(await page.locator('img[alt="Unreferenced fallback"]').count(), 1);
     assert.equal(await page.locator('.post-body').innerHTML(), staticText);
     await page.evaluate(({manifest, origin}) => {
@@ -154,17 +178,30 @@ const server = http.createServer((req, res) => {
     }, {manifest, origin});
     assert.deepEqual(await mediaOrder(), [pdfKey, linkedImageKey, 'inline:fallback'], 'reordered links move reused PDF to the corresponding position');
     assert.equal(await page.evaluate(() => originalStaticPdf === document.getElementById('original-pdf-block')), true);
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3', 'reordering preserves the selected page');
     await page.evaluate(({manifest, origin}) => {
       const body = document.querySelector('.post-body');body.firstElementChild.remove();
       BlogEvidenceMedia.enhanceArticle(body, BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
     }, {manifest, origin});
     assert.deepEqual(await mediaOrder(), [linkedImageKey, pdfKey, 'inline:fallback'], 'unreferenced static PDF and inline fallback remain available');
+    assert.equal(await carousel.locator('.evidence-pdf-controls').count(), 1);
+    for (const width of [390, 320]) {
+      await page.setViewportSize({width, height: 844});
+      await carousel.getByRole('button', {name: 'Previous page'}).scrollIntoViewIfNeeded();
+      const dimensions = await page.evaluate(() => {
+        const main = document.querySelector('.main'), controls = document.querySelector('.evidence-pdf-controls').getBoundingClientRect();
+        return {page: document.documentElement.scrollWidth, viewport: innerWidth, main: main.clientWidth, scroll: main.scrollWidth, left: controls.left, right: controls.right};
+      });
+      assert.ok(dimensions.page <= width && dimensions.scroll <= dimensions.main + 1 && dimensions.left >= 0 && dimensions.right <= width, width + 'px carousel has no horizontal overflow');
+    }
+    await carousel.getByRole('button', {name: 'Previous page'}).click();
+    assert.equal(await carousel.getByRole('status').textContent(), 'Page 1 of 3', 'mobile arrows remain operable');
     await page.goto(origin + '/plain');
     assert.equal(await page.locator('.post-media').evaluate(pane => pane.hidden), true);
     assert.equal(await page.locator('.post-media').evaluate(pane => getComputedStyle(pane).display), 'none');
     assert.ok((await page.locator('.reading-column').boundingBox()).width <= 660);
     assert.deepEqual(errors, []);
-    console.log('Media pane browser checks passed: inline links, PDF previews, clean editor, playback, desktop/mobile, text-only layout.');
+    console.log('Media pane browser checks passed: poster carousel and keyboard controls, representative PDF previews, inline links, clean editor, playback, desktop/mobile, text-only layout.');
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));
