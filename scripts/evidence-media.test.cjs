@@ -63,12 +63,23 @@ test('known PDF previews resolve on the current site and keep a stable public do
   assert.equal(entries[0].downloadURL.href, data['/evidence/example/'].public_pdf);
   assert.deepEqual(entries[0].pages, [1]);
   assert.equal(entries[0].totalPages, 1);
+  assert.deepEqual(entries[0].mediaOrder, [], 'default media stays in source order');
   assert.equal(knownPdf(data['/evidence/example/'].public_pdf + '#page=1', entries, 'https://private.example/'), entries[0]);
   assert.equal(knownPdf('/assets/evidence/example/poster.pdf', entries, 'https://private.example/'), entries[0]);
   assert.equal(knownPdf('https://unrelated.example/blog/assets/evidence/example/poster.pdf', entries, 'https://private.example/'), null);
   assert.equal(knownPdf('https://user@public.example/blog/assets/evidence/example/poster.pdf', entries, 'https://private.example/'), null);
   for (const previews of [['https://unrelated.example/image.png'], ['/assets/evidence/../private.png'], ['/assets/evidence/example/file.pdf']]) {
     assert.deepEqual(pdfManifest({'/bad/': {...data['/evidence/example/'], previews}}, 'https://private.example/'), []);
+  }
+});
+
+test('only explicit valid media order settings override source order', () => {
+  const data = require('../_data/evidence.json'), entry = data['/evidence/ct-scanner/'];
+  assert.deepEqual(pdfManifest(data, 'https://private.example/')[0].mediaOrder, ['pdf', 'image', 'video']);
+  for (const media_order of [null, 'pdf,image,video', [], ['pdf', 'pdf'], ['pdf', 'unknown']]) {
+    const parsed = pdfManifest({'/example/': {...entry, media_order}}, 'https://private.example/');
+    assert.equal(parsed.length, 1, 'invalid ordering never removes PDF previews');
+    assert.deepEqual(parsed[0].mediaOrder, []);
   }
 });
 

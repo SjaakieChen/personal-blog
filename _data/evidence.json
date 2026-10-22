@@ -3,6 +3,7 @@
     "pdf": "/assets/evidence/ct-scanner/poster.pdf",
     "public_pdf": "https://sjaakiechen.github.io/personal-blog/assets/evidence/ct-scanner/poster.pdf",
     "title": "CT scanner group project poster",
+    "media_order": ["pdf", "image", "video"],
     "previews": [
       "/assets/evidence/ct-scanner/poster-page-1.webp",
       "/assets/evidence/ct-scanner/poster-page-2.webp",

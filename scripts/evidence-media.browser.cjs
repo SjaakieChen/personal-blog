@@ -9,6 +9,8 @@ const manifest = {'/evidence/example/': {pdf: '/assets/evidence/example/poster.p
   '/private-example/': {pdf: '/assets/evidence/drafts/example/paper.pdf', download_url: '/assets/evidence/drafts/example/paper.pdf',
     title: 'Private example paper', previews: [1, 10, 16].map(page => '/assets/evidence/drafts/example/page-' + page + '.webp'),
     preview_pages: [1, 10, 16], total_pages: 22}};
+Object.assign(manifest, require('../_data/evidence.json'));
+const ct = manifest['/evidence/ct-scanner/'];
 const ownPublicImage = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/example/knight.png';
 const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.pdf">full private paper</a>.</p>'
   + '<p><a href="' + ownPublicImage + '">Knight shadow</a></p>'
@@ -27,19 +29,26 @@ const text = '<p>See the <a class="text-citation" data-reference="demo" data-lab
   + '<p><a href="' + screenshot + '#full-size">Same screenshot again</a></p>'
   + '<p><a href="https://external.example' + screenshot + '">External image stays a link</a></p>'
   + '<div class="references"><p><a href="https://youtu.be/Zyx-321_cbA">Reference only</a></p></div>';
+const ctText = '<p><a href="https://youtu.be/Abc_123-Xyz">Submission video</a></p>'
+  + '<p><a href="' + ownPublicImage + '">Knight shadow</a></p>'
+  + '<p><a href="' + ct.public_pdf + '">Download the original poster</a></p>';
+const ctReferences = '<div class="references"><p><a href="' + ct.public_pdf + '#page=1">Poster reference</a></p></div>';
+const ctStaticPane = '<div id="ct-original-pdf" class="evidence-pdf" data-media-key="pdf:' + ct.pdf + '" data-static-media>'
+  + ct.previews.map((src, i) => '<figure><a href="' + ct.public_pdf + '"><img src="' + src + '" alt="Poster page ' + (i + 1) + '"></a><figcaption>Poster page ' + (i + 1) + '</figcaption></figure>').join('') + '</div>';
 function html(mode) {
-  const writer = mode === '/writer' || mode === '/private-writer', plain = mode === '/plain';
+  const writer = ['/writer', '/private-writer', '/ct-writer'].includes(mode), plain = mode === '/plain';
+  const ctMode = mode === '/ct-writer' || mode === '/ct-archive';
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css">'
     + '<script src="/assets/evidence-media.js" defer></script></head><body><div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'
     + '<article class="post"><div class="post-copy"><h1>Research evidence</h1><div ' + (writer ? 'id="body" contenteditable="true" ' : '') + 'class="post-body">'
-    + (plain ? '<p>A plain text article without media.</p>' : mode === '/private-writer' ? privateText : mode === '/static-archive' ? staticText : text) + '</div></div><aside class="post-media" '
-    + (writer ? 'id="evidence-media-preview" ' : '') + 'aria-label="Media" hidden>' + (mode === '/static-archive' ? staticPane : '') + '</aside></article></div></main></div></body></html>';
+    + (plain ? '<p>A plain text article without media.</p>' : ctMode ? ctText + ctReferences : mode === '/private-writer' ? privateText : mode === '/static-archive' ? staticText : text) + '</div></div><aside class="post-media" '
+    + (writer ? 'id="evidence-media-preview" ' : '') + 'aria-label="Media" hidden>' + (mode === '/static-archive' ? staticPane : mode === '/ct-archive' ? ctStaticPane : '') + '</aside></article></div></main></div></body></html>';
 }
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
-  if (['/writer', '/private-writer', '/archive', '/static-archive', '/plain'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
+  if (['/writer', '/private-writer', '/archive', '/static-archive', '/plain', '/ct-writer', '/ct-archive'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
-  if (pathname === screenshot || pathname === '/assets/evidence/example/knight.png' || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
+  if (pathname === screenshot || pathname === '/assets/evidence/example/knight.png' || ct.previews.includes(pathname) || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#e7edf1"/><text x="80" y="100" font-size="36">Project poster preview</text></svg>');return;
   }
   if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
@@ -65,6 +74,8 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('.post-media .evidence-pdf img').count(), 3);
     const carousel = page.locator('.evidence-pdf-carousel');
     await carousel.waitFor();
+    assert.deepEqual(await page.locator('.post-media > [data-media-key]').evaluateAll(blocks => blocks.map(block => block.dataset.mediaKey.split(':')[0])),
+      ['video', 'pdf', 'image'], 'unconfigured PDFs preserve source order');
     assert.equal(await carousel.getAttribute('aria-roledescription'), 'carousel');
     assert.equal(await carousel.getAttribute('aria-label'), 'Example group project poster');
     assert.equal(await carousel.locator('figure:visible').count(), 1, 'one poster page is visible');
@@ -196,6 +207,34 @@ const server = http.createServer((req, res) => {
     }
     await carousel.getByRole('button', {name: 'Previous page'}).click();
     assert.equal(await carousel.getByRole('status').textContent(), 'Page 1 of 3', 'mobile arrows remain operable');
+    for (const mode of ['/ct-writer', '/ct-archive']) {
+      await page.goto(origin + mode);
+      await page.waitForSelector('.evidence-pdf-carousel');
+      const expected = ['pdf:' + ct.pdf, linkedImageKey, 'video:Abc_123-Xyz'];
+      assert.deepEqual(await mediaOrder(), expected, mode + ' opts into poster, picture, video order');
+      assert.equal(await page.locator('.post-body').innerHTML(), ctText + ctReferences, 'prose, links and citation markup stay unchanged');
+      await carousel.getByRole('button', {name: 'Next page'}).click();
+      await page.evaluate(({manifest, origin}) => {
+        window.ctFrame = document.querySelector('iframe');window.ctPoster = document.querySelector('.evidence-pdf');
+        const body = document.querySelector('.post-body');body.insertAdjacentHTML('beforeend', '<p>More text.</p>');
+        BlogEvidenceMedia.renderPane(body, document.querySelector('.post-media'), BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
+      }, {manifest, origin});
+      assert.deepEqual(await mediaOrder(), expected);
+      assert.equal(await page.evaluate(() => ctFrame === document.querySelector('iframe') && ctPoster === document.querySelector('.evidence-pdf')), true, 'ordered renders preserve the live player and poster nodes');
+      assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3');
+      await page.evaluate(({manifest, origin}) => {
+        const body = document.querySelector('.post-body');body.querySelectorAll(':scope > p')[2].remove();
+        BlogEvidenceMedia.renderPane(body, document.querySelector('.post-media'), BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
+      }, {manifest, origin});
+      assert.equal(await page.locator('.references').innerHTML(), '<p><a href="' + ct.public_pdf + '#page=1">Poster reference</a></p>');
+      if (mode === '/ct-archive') {
+        assert.deepEqual(await mediaOrder(), expected, 'public static poster still matches its policy when only a reference link remains');
+        assert.equal(await page.locator('#ct-original-pdf').count(), 1);
+        assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3');
+      } else {
+        assert.deepEqual(await mediaOrder(), ['video:Abc_123-Xyz', linkedImageKey], 'without a displayed configured PDF, source order and reference exclusion remain unchanged');
+      }
+    }
     await page.goto(origin + '/plain');
     assert.equal(await page.locator('.post-media').evaluate(pane => pane.hidden), true);
     assert.equal(await page.locator('.post-media').evaluate(pane => getComputedStyle(pane).display), 'none');

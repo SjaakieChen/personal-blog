@@ -69,13 +69,17 @@
       if (!Array.isArray(pages) || pages.length !== entry.previews.length
           || !pages.every(page => Number.isSafeInteger(page) && page > 0)
           || (totalPages !== null && (!Number.isSafeInteger(totalPages) || totalPages < Math.max(...pages)))) return [];
+      const order = entry.media_order;
+      const mediaOrder = Array.isArray(order) && order.length > 0
+        && order.every(type => ['pdf', 'image', 'video', 'demo'].includes(type))
+        && new Set(order).size === order.length ? order.slice() : [];
       try {
         const download = entry.download_url || entry.public_pdf;
         if (typeof download !== 'string' || !download.trim()) return [];
         const downloadURL = new URL(download, assetBase), baseURL = new URL(assetBase);
         const sameOriginHTTP = downloadURL.protocol === 'http:' && downloadURL.origin === baseURL.origin;
         if ((downloadURL.protocol !== 'https:' && !sameOriginHTTP) || downloadURL.username || downloadURL.password) return [];
-        return [{type: 'pdf', key: 'pdf:' + entry.pdf, title: entry.title, downloadURL, pages, totalPages,
+        return [{type: 'pdf', key: 'pdf:' + entry.pdf, title: entry.title, downloadURL, pages, totalPages, mediaOrder,
           localURL: new URL(entry.pdf.slice(1), assetBase),
           previews: entry.previews.map(preview => new URL(preview.slice(1), assetBase).href)}];
       } catch { return []; }
@@ -265,6 +269,18 @@
     // Reuse linked server-rendered media in source order, then retain any
     // unreferenced PDF or inline-media fallback after the linked items.
     blocks.push(...available.filter(block => block.hasAttribute('data-static-media') && !blocks.includes(block)));
+    // A configured evidence document can opt into a pane order without moving
+    // the author's paragraphs or replacing live players/carousel state.
+    const order = entries.find(entry => entry.mediaOrder?.length
+      && blocks.some(block => block.dataset.mediaKey === entry.key))?.mediaOrder;
+    if (order) {
+      const rank = block => {
+        const type = block.classList.contains('evidence-image') ? 'image' : block.dataset.mediaKey.split(':', 1)[0];
+        const position = order.indexOf(type);
+        return position < 0 ? order.length : position;
+      };
+      blocks.sort((left, right) => rank(left) - rank(right));
+    }
     for (const block of blocks) {
       const item = entries.find(entry => entry.key === block.dataset.mediaKey);
       if (item) enhancePdf(block, item);
