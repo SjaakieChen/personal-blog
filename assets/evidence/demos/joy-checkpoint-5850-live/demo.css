@@ -2,6 +2,11 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: #fff; }
 main { width: 100%; max-width: 660px; margin: 0 auto; }
+.demo-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 8px 0; color: #52636a; font: 12px/1.4 system-ui, sans-serif; }
+.demo-progress { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.demo-progress::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 6px; border-radius: 50%; background: #a4adaf; vertical-align: 2px; }
+.demo-progress[data-running="true"]::before { background: #577a65; }
+.demo-hint { margin: 3px 8px 8px; color: #657278; font: 11px/1.4 system-ui, sans-serif; }
 .views { display: grid; grid-template-columns: minmax(0, 1fr) clamp(48px, 14vw, 80px); align-items: start; gap: 12px; }
 .simulation { min-width: 0; }
 canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }

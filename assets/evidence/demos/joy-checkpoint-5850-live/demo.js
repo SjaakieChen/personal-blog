@@ -428,7 +428,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   "use strict";
   const root = document.getElementById("joy-checkpoint-demo");
   const $ = selector => root.querySelector(selector);
-  let running = false, frame = 0;
+  let running = false, frame = 0, suspended = false;
+  let updateProgress = () => {};
 
   function notify(type, detail) {
     window.parent.postMessage(Object.assign({type}, detail || {}), "*");
@@ -437,13 +438,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     running = !!value;
     if (!running && frame) { cancelAnimationFrame(frame); frame = 0; }
     if (running && !frame && !document.hidden) frame = requestAnimationFrame(tick);
+    updateProgress();
   }
   function suspendFrames() {
+    suspended = true;
     if (frame) cancelAnimationFrame(frame);
     frame = 0;
+    updateProgress();
   }
   function resumeFrames() {
+    suspended = false;
     if (running && !frame && !document.hidden) frame = requestAnimationFrame(tick);
+    updateProgress();
   }
   function failure(error) {
     setRunning(false);
@@ -489,6 +495,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     const rgba = ctx.createImageData(width, height);
     const targetRGBA = targetCtx.createImageData(width, height);
     let lastDraw = 0, phase = "Growing from one cell", pointer = null, updateFrame = true;
+    let suppressClick = false;
+    const progress = $("[data-progress]");
+    updateProgress = () => {
+      const active = running && !document.hidden && !suspended;
+      progress.dataset.running = String(active);
+      progress.textContent = (active ? "" : "Paused · ") + engine.steps.toLocaleString() + " steps";
+      progress.title = active ? "Simulation running" : "Simulation paused";
+    };
 
     function decode(descriptor, count) {
       if (descriptor.encoding !== "base64-float32-le" || descriptor.layout !== "NHWC") {
@@ -533,6 +547,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       mse /= width * height * 4;
       if (!Number.isFinite(mse)) throw new Error("The simulation became unstable. Restore the grown state or start from a seed.");
       paint(engine.state, channels, rgba, ctx, worldWidth, margin, margin);
+      updateProgress();
       return mse;
     }
     function announce(text) { $("[data-announcement]").textContent = text; }
@@ -587,6 +602,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }
     canvas.addEventListener("pointerdown", guarded(event => {
       if (event.button !== 0 || pointer !== null) return;
+      suppressClick = false;
       const p = at(event);
       pointer = {id: event.pointerId, clientX: event.clientX, clientY: event.clientY,
         x: p.x, y: p.y, dragging: false};
@@ -594,8 +610,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }));
     canvas.addEventListener("pointermove", guarded(event => {
       if (!pointer || pointer.id !== event.pointerId) return;
-      // A click must not erase: a double-click plants a seed without removing
-      // any neighboring cells first. Only a deliberate drag starts the brush.
+      // Leave a small movement tolerance so a click plants a seed without
+      // erasing its neighboring cells first.
       if (!pointer.dragging && Math.hypot(event.clientX - pointer.clientX, event.clientY - pointer.clientY) < 4) return;
       const p = at(event);
       if (!pointer.dragging) damage(pointer.x, pointer.y);
@@ -612,13 +628,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     function release(event) {
       if (!pointer || pointer.id !== event.pointerId) return;
       const dragged = pointer.dragging;
+      suppressClick = dragged || event.type !== "pointerup";
       pointer = null;
       if (dragged) announce(running ? "Cells erased. Repair simulation running." : "Cells erased. Simulation paused.");
     }
     canvas.addEventListener("pointerup", guarded(release));
     canvas.addEventListener("pointercancel", guarded(release));
     canvas.addEventListener("lostpointercapture", guarded(release));
-    canvas.addEventListener("dblclick", guarded(event => {
+    canvas.addEventListener("click", guarded(event => {
+      if (suppressClick) { suppressClick = false; return; }
+      // A double-click already planted its seed on the first click.
+      if (event.detail > 1) return;
       const p = at(event);
       pointer = null;
       seedAt(p.x, p.y);
