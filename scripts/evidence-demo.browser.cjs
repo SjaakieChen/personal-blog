@@ -193,6 +193,48 @@ const server = http.createServer((req, res) => {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'inline media fits narrow screens');
     await page.setViewportSize({width: 1280, height: 900});
 
+    // Demo-supplied captions sit in the parent figure, outside the iframe's
+    // border, and survive title edits without restarting the running demo.
+    for (const route of ['/writer-auto', '/archive-auto']) {
+      await page.goto(origin + route);
+      await frame.locator('body[data-initialized="yes"]').waitFor();
+      const captionText = 'my very own cellular automata trained by me :)';
+      await frame.locator('body').evaluate((body, caption) => {
+        parent.postMessage({type: 'blog-demo-ready', caption}, '*');
+      }, captionText);
+      await page.waitForFunction(text => document.querySelector('.evidence-demo > figcaption')?.textContent === text, captionText);
+      const caption = pane.locator(':scope > figcaption');
+      assert.equal(await caption.isVisible(), true, 'an explicit ready caption is visible in private and public inline media');
+      assert.equal(await pane.locator('.evidence-demo-stage figcaption').count(), 0, 'caption is outside the bordered demo stage');
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({width, height: 900});
+        assert.ok(await caption.evaluate(element => element.getBoundingClientRect().top
+          >= element.parentElement.querySelector('iframe').getBoundingClientRect().bottom), 'caption sits below the iframe border on desktop and mobile');
+      }
+      await page.setViewportSize({width: 1280, height: 900});
+      const beforeCaptionRedraw = requests.length;
+      await page.evaluate(() => { window.captionFrame = document.querySelector('.evidence-demo iframe'); });
+      await page.locator('.post-body a').first().evaluate(link => { link.textContent = 'Updated accessible demo title'; });
+      await page.evaluate(() => BlogEvidenceMedia.renderPane(document.querySelector('.post-body'), document.querySelector('.post-media')));
+      assert.equal(await caption.textContent(), captionText, 'explicit caption survives an editor redraw and link title change');
+      assert.equal(await pane.locator('iframe').getAttribute('title'), 'Updated accessible demo title');
+      assert.equal(await page.evaluate(() => captionFrame === document.querySelector('.evidence-demo iframe')), true);
+      assert.equal(requests.length, beforeCaptionRedraw, 'caption redraw keeps the existing simulation running');
+      await page.evaluate(() => dispatchEvent(new MessageEvent('message', {
+        source: window, data: {type: 'blog-demo-ready', caption: 'Forged caption'}
+      })));
+      assert.equal(await caption.textContent(), captionText, 'a message from another window cannot replace the caption');
+      const literalCaption = '<em>Caption is plain text</em>';
+      await frame.locator('body').evaluate((body, caption) => {
+        parent.postMessage({type: 'blog-demo-ready', caption}, '*');
+      }, literalCaption);
+      await page.waitForFunction(text => document.querySelector('.evidence-demo > figcaption')?.textContent === text, literalCaption);
+      assert.equal(await caption.locator('*').count(), 0, 'caption markup is displayed literally, never interpreted as HTML');
+      await frame.getByRole('button', {name: 'Initialize'}).click();
+      await page.waitForFunction(() => document.querySelector('.evidence-demo > figcaption').hidden);
+      await assertInlineControls();
+    }
+
     // Exercise the real link handler in its normal script order. Two distinct
     // text links select their own existing frame in editable and public pages.
     for (const route of ['/writer-two', '/personal-blog/archive-two', '/personal-blog/feed-two']) {

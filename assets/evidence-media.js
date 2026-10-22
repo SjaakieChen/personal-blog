@@ -4,6 +4,7 @@
   const siteBase = scriptSource ? new URL('../', scriptSource).href : null;
   const demoCleanup = new WeakMap();
   const demoStart = new WeakMap();
+  const demoCaptions = new WeakMap();
   const mediaAnchors = new WeakMap();
   const paneLayouts = new WeakMap();
 
@@ -233,7 +234,7 @@
       stop();block.dataset.state = 'loading';load.disabled = true;load.textContent = 'Loading…';
       unload.hidden = controls.hidden = status.hidden = autoLoad;status.textContent = autoLoad ? '' : 'Loading emulator…';
       const frame = doc.createElement('iframe');
-      frame.title = caption.textContent;frame.setAttribute('sandbox', 'allow-scripts');
+      frame.title = block.dataset.demoTitle || item.title;frame.setAttribute('sandbox', 'allow-scripts');
       frame.referrerPolicy = 'no-referrer';frame.allow = 'fullscreen';frame.allowFullscreen = true;
       let timer;
       const fail = () => {
@@ -246,6 +247,10 @@
         if (event.data?.type === 'blog-demo-ready') {
           view.clearTimeout(timer);block.dataset.state = 'ready';load.hidden = true;fullscreen.hidden = autoLoad;
           status.hidden = autoLoad;status.textContent = autoLoad ? '' : 'Emulator ready.';
+          const text = typeof event.data.caption === 'string' ? event.data.caption.trim().slice(0, 500) : '';
+          if (text) demoCaptions.set(block, text);else demoCaptions.delete(block);
+          caption.textContent = text || block.dataset.demoTitle || item.title;
+          caption.hidden = autoLoad && !text;
         } else if (event.data?.type === 'blog-demo-error') fail();
       };
       view.addEventListener('message', receive);frame.addEventListener('error', fail);
@@ -466,7 +471,8 @@
           unique = id + '--instance-' + instance++;
         }
         block.id = unique;
-        block.querySelector('figcaption').textContent = item.title;
+        block.dataset.demoTitle = item.title;
+        block.querySelector('figcaption').textContent = demoCaptions.get(block) || item.title;
         const frame = block.querySelector('iframe');
         if (frame) frame.title = item.title;
       }
