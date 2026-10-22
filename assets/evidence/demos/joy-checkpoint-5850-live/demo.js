@@ -495,7 +495,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     const rgba = ctx.createImageData(width, height);
     const targetRGBA = targetCtx.createImageData(width, height);
     let lastDraw = 0, phase = "Growing from one cell", pointer = null, updateFrame = true;
-    let suppressClick = false;
+    let suppressClick = false, pendingClick = null;
     const progress = $("[data-progress]");
     updateProgress = () => {
       const active = running && !document.hidden && !suspended;
@@ -503,6 +503,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       progress.textContent = (active ? "" : "Paused · ") + engine.steps.toLocaleString() + " steps";
       progress.title = active ? "Simulation running" : "Simulation paused";
     };
+    function cancelClick() {
+      if (pendingClick) clearTimeout(pendingClick.timer);
+      pendingClick = null;
+    }
+    function applyClick() {
+      if (!pendingClick) return;
+      const p = pendingClick;
+      cancelClick();
+      damage(p.x, p.y);
+      announce(running ? "Cells erased. Repair simulation running." : "Cells erased. Simulation paused.");
+    }
 
     function decode(descriptor, count) {
       if (descriptor.encoding !== "base64-float32-le" || descriptor.layout !== "NHWC") {
@@ -553,6 +564,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     function announce(text) { $("[data-announcement]").textContent = text; }
     function clearFailure() { $("[data-failure]").hidden = true; }
     function restore() {
+      cancelClick();
       setRunning(false);
       engine.loadState(grownState, grown.steps);
       phase = "Grown state";
@@ -560,6 +572,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       draw();
     }
     function seed() {
+      cancelClick();
       engine.seed();
       phase = "Growing from one cell";
       clearFailure();
@@ -610,11 +623,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     }));
     canvas.addEventListener("pointermove", guarded(event => {
       if (!pointer || pointer.id !== event.pointerId) return;
-      // Leave a small movement tolerance so a click plants a seed without
-      // erasing its neighboring cells first.
+      // A short movement tolerance keeps clicks separate from brush strokes.
       if (!pointer.dragging && Math.hypot(event.clientX - pointer.clientX, event.clientY - pointer.clientY) < 4) return;
       const p = at(event);
-      if (!pointer.dragging) damage(pointer.x, pointer.y);
+      if (!pointer.dragging) { applyClick(); damage(pointer.x, pointer.y); }
       pointer.dragging = true;
       const distance = Math.hypot(p.x - pointer.x, p.y - pointer.y);
       const segments = Math.max(1, Math.ceil(distance / 4));
@@ -637,8 +649,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     canvas.addEventListener("lostpointercapture", guarded(release));
     canvas.addEventListener("click", guarded(event => {
       if (suppressClick) { suppressClick = false; return; }
-      // A double-click already planted its seed on the first click.
-      if (event.detail > 1) return;
+      if (event.detail > 1) { cancelClick(); return; }
+      // Keep separate rapid clicks, while allowing a double-click to seed
+      // before the single-click brush is applied.
+      applyClick();
+      const p = at(event);
+      pendingClick = {...p, timer: setTimeout(guarded(applyClick), 500)};
+    }));
+    canvas.addEventListener("dblclick", guarded(event => {
+      cancelClick();
       const p = at(event);
       pointer = null;
       seedAt(p.x, p.y);
@@ -650,6 +669,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       if (document.hidden) suspendFrames();else resumeFrames();
     });
     window.addEventListener("pagehide", suspendFrames);
+    window.addEventListener("pagehide", cancelClick);
     window.addEventListener("pageshow", resumeFrames);
     paint(target, 4, targetRGBA, targetCtx);
     seed();
