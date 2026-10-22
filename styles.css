@@ -93,5 +93,7 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .evidence-demo:fullscreen iframe { height: 100%; max-height: none; }
 .post-media img, .post-media video { display: block; max-width: 100%; height: auto; }
 .post-media audio { max-width: 100%; }
+/* A static, temporary edge cue keeps navigation clear without motion or reflow. */
+.post-media .media-reveal { outline: 2px solid #6f8fa1; outline-offset: 4px; }
 @media(min-width:901px) and (max-width:1150px) { .main:has(.post-media:not([hidden])) { padding-left: 26px; padding-right: 26px; } }
 @media(max-width:900px) { .post:has(> .post-media:not([hidden])) { grid-template-columns: minmax(0,1fr); gap: 32px; } }

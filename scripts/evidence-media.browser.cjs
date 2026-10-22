@@ -36,23 +36,27 @@ const ctText = '<p>Our scanner setup.<sup class="citation" data-reference="ct-po
 const ctReferences = '<div class="references"><ol><li id="ref-ct-1"><a href="' + ct.public_pdf + '#page=1">Poster reference</a></li></ol></div>';
 const ctStaticPane = '<div data-ct-original-pdf class="evidence-pdf" data-media-key="pdf:' + ct.pdf + '" data-static-media>'
   + ct.previews.map((src, i) => '<figure><a href="' + ct.public_pdf + '"><img src="' + src + '" alt="Poster page ' + (i + 1) + '"></a><figcaption>Poster page ' + (i + 1) + '</figcaption></figure>').join('') + '</div>';
+const highlightSources = {image: screenshot, video: 'https://youtu.be/Abc_123-Xyz',
+  pdf: '#media-evidence--example-page-3', demo: '/assets/evidence/drafts/demos/highlight/index.html'};
+const highlightLinks = Object.entries(highlightSources).map(([type, href]) => '<p><a data-highlight="' + type + '" href="' + href + '">' + type + ' target</a></p>').join('');
 function html(mode) {
-  const writer = ['/writer', '/private-writer', '/ct-writer'].includes(mode), plain = mode === '/plain';
+  const writer = ['/writer', '/private-writer', '/ct-writer', '/highlight-writer'].includes(mode), plain = mode === '/plain', highlight = mode.startsWith('/highlight-');
   const ctMode = mode === '/ct-writer' || mode === '/ct-archive';
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css">'
-    + '<script src="/assets/evidence-media.js" defer></script></head><body><div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'
+    + (highlight ? '<script src="/assets/links.js" defer></script>' : '') + '<script src="/assets/evidence-media.js" defer></script></head><body><div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'
     + '<article class="post"><div class="post-copy"><h1>Research evidence</h1><div ' + (writer ? 'id="body" contenteditable="true" ' : '') + 'class="post-body">'
-    + (plain ? '<p>A plain text article without media.</p>' : ctMode ? ctText + ctReferences : mode === '/private-writer' ? privateText : mode === '/static-archive' ? staticText : text) + '</div></div><aside class="post-media" '
+    + (plain ? '<p>A plain text article without media.</p>' : ctMode ? ctText + ctReferences : mode === '/private-writer' ? privateText : mode === '/static-archive' ? staticText : text) + (highlight ? highlightLinks : '') + '</div>'
+    + (highlight ? '<section id="target-references" class="references">' + highlightLinks + '</section>' : '') + '</div><aside class="post-media" '
     + (writer ? 'id="evidence-media-preview" ' : '') + 'aria-label="Media" hidden>' + (mode === '/static-archive' ? staticPane : mode === '/ct-archive' ? ctStaticPane : '') + '</aside></article></div></main></div></body></html>';
 }
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
-  if (['/writer', '/private-writer', '/archive', '/static-archive', '/plain', '/ct-writer', '/ct-archive'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
+  if (['/writer', '/private-writer', '/archive', '/static-archive', '/plain', '/ct-writer', '/ct-archive', '/highlight-writer', '/highlight-archive'].includes(pathname)) {res.setHeader('Content-Type', 'text/html');res.end(html(pathname));return;}
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
   if (pathname === screenshot || pathname === '/assets/evidence/example/knight.png' || ct.previews.includes(pathname) || /^\/assets\/evidence\/(drafts\/)?example\/page-\d+\.webp$/.test(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#e7edf1"/><text x="80" y="100" font-size="36">Project poster preview</text></svg>');return;
   }
-  if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
+  if (['/styles.css', '/assets/evidence-media.js', '/assets/links.js'].includes(pathname)) {
     res.setHeader('Content-Type', pathname.endsWith('.js') ? 'application/javascript' : 'text/css');res.end(fs.readFileSync(path.join(root, pathname)));return;
   }
   res.writeHead(404);res.end();
@@ -271,12 +275,40 @@ const server = http.createServer((req, res) => {
         assert.deepEqual(await mediaOrder(), ['video:Abc_123-Xyz', linkedImageKey], 'uncited reference-list PDFs do not create previews');
       }
     }
+    for (const mode of ['/highlight-writer', '/highlight-archive']) {
+      await page.goto(origin + mode);
+      await page.locator('#media-evidence--example-page-3').waitFor({state: 'attached'});
+      await page.locator('.evidence-demo').waitFor();
+      const original = await page.locator('.post-body').innerHTML(), tabs = context.pages().length;
+      await page.evaluate(() => { window.retainedVideo = document.querySelector('.evidence-video iframe'); });
+      const targets = {image: '.evidence-image', video: '.evidence-video', pdf: '#media-evidence--example-page-3', demo: '.evidence-demo'};
+      for (const scope of ['.post-body', '#target-references']) for (const [type, selector] of Object.entries(targets)) {
+        const dimensions = await page.locator(selector).evaluate(element => ({width: element.offsetWidth, height: element.offsetHeight}));
+        await page.locator(scope + ' [data-highlight="' + type + '"]').click();
+        assert.equal(await page.locator(selector).evaluate(element => element.classList.contains('media-reveal')), true, type + ' navigation highlights the destination');
+        assert.equal(await page.locator('.media-reveal').count(), 1, 'only the latest destination is highlighted');
+        assert.deepEqual(await page.locator(selector).evaluate(element => ({width: element.offsetWidth, height: element.offsetHeight})), dimensions, 'outline does not change layout dimensions');
+        const style = await page.locator(selector).evaluate(element => { const style = getComputedStyle(element);return {outline: style.outlineStyle, width: style.outlineWidth, animation: style.animationName}; });
+        assert.deepEqual(style, {outline: 'solid', width: '2px', animation: 'none'});
+        assert.equal(context.pages().length, tabs);assert.equal(new URL(page.url()).pathname, mode);
+        if (type === 'pdf') assert.equal(await page.locator(selector).getAttribute('aria-hidden'), 'false', 'carousel selects the destination before highlighting');
+      }
+      assert.equal(await page.evaluate(() => retainedVideo === document.querySelector('.evidence-video iframe')), true, 'video navigation keeps playback frame intact');
+      assert.equal(await page.locator('.evidence-demo iframe').count(), 0, 'highlighting a lazy demo does not load it');
+      assert.equal(await page.locator('.post-body').innerHTML(), original, 'highlighting leaves editable text and source hrefs untouched');
+      await page.waitForFunction(() => !document.querySelector('.media-reveal'), undefined, {timeout: 4000});
+      await page.emulateMedia({reducedMotion: 'reduce'});
+      await page.locator('.post-body [data-highlight="image"]').click();
+      assert.equal(await page.locator('.evidence-image').evaluate(element => getComputedStyle(element).animationName), 'none', 'reduced-motion users receive a static cue');
+      assert.equal(await page.locator('.evidence-image').evaluate(element => element.classList.contains('media-reveal')), true);
+      await page.emulateMedia({reducedMotion: 'no-preference'});
+    }
     await page.goto(origin + '/plain');
     assert.equal(await page.locator('.post-media').evaluate(pane => pane.hidden), true);
     assert.equal(await page.locator('.post-media').evaluate(pane => getComputedStyle(pane).display), 'none');
     assert.ok((await page.locator('.reading-column').boundingBox()).width <= 660);
     assert.deepEqual(errors, []);
-    console.log('Media pane browser checks passed: poster carousel and keyboard controls, representative PDF previews, inline links, clean editor, playback, desktop/mobile, text-only layout.');
+    console.log('Media pane browser checks passed: image/PDF/video/demo body and reference links highlight without layout shift, expire after2s, preserve playback/editor text and respect reduced motion; poster carousel, representative previews, desktop/mobile and text-only layout.');
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

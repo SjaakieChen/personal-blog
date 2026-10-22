@@ -162,23 +162,33 @@
   }
 
   function imageTarget(link) {
-    const body = link.closest('.post-body');
-    if (!body || link.closest('.references, [data-references], .explanation-notes, [data-notes]')) return null;
+    const copy = link.closest('.post-copy');
+    if (!copy) return null;
     const url = imageURL(link.getAttribute('href'), link.ownerDocument.baseURI, siteBase);
-    const pane = body.closest('.post')?.querySelector(':scope > .post-media');
+    const pane = copy.closest('.post')?.querySelector(':scope > .post-media');
     if (!url || !pane || pane.hidden) return null;
     return [...pane.children].find(block => !block.hidden && block.classList.contains('evidence-image')
       && block.dataset.mediaKey === 'image:' + url) || null;
   }
 
   function demoTarget(link) {
-    const body = link.closest('.post-body');
-    if (!body || link.closest('.references, [data-references], .explanation-notes, [data-notes]')) return null;
+    const copy = link.closest('.post-copy');
+    if (!copy) return null;
     const url = demoURL(link.getAttribute('href'), link.ownerDocument.baseURI, siteBase);
-    const pane = body.closest('.post')?.querySelector(':scope > .post-media');
+    const pane = copy.closest('.post')?.querySelector(':scope > .post-media');
     if (!url || !pane || pane.hidden) return null;
     return [...pane.children].find(block => !block.hidden && block.classList.contains('evidence-demo')
       && ['demo:' + url, 'demo:auto:' + url].includes(block.dataset.mediaKey)) || null;
+  }
+
+  function videoTarget(link) {
+    const copy = link.closest('.post-copy');
+    if (!copy) return null;
+    const id = youtubeId(link.getAttribute('href'));
+    const pane = copy.closest('.post')?.querySelector(':scope > .post-media');
+    if (!id || !pane || pane.hidden) return null;
+    return [...pane.children].find(block => !block.hidden && block.classList.contains('evidence-video')
+      && block.dataset.mediaKey === 'video:' + id) || null;
   }
 
   function createDemo(doc, block, item) {
@@ -550,15 +560,28 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, videoTarget, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;
+    let highlighted = null, highlightTimer;
+    root.document.addEventListener('blog-media-reveal', event => {
+      const target = event.detail?.target || event.target;
+      const media = target?.closest?.('.post-media [data-media-key], .post-media figure');
+      if (!media) return;
+      root.clearTimeout(highlightTimer);
+      highlighted?.classList.remove('media-reveal');
+      highlighted = media;media.classList.add('media-reveal');
+      highlightTimer = root.setTimeout(() => {
+        media.classList.remove('media-reveal');
+        if (highlighted === media) highlighted = null;
+      }, 2000);
+    });
     // Run before the document's external-link handler. Keep source hrefs
     // editable and serialized unchanged; modifier clicks retain normal links.
     root.addEventListener('click', event => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const link = event.target.closest?.('a[href]'), target = link && demoTarget(link);
+      const link = event.target.closest?.('a[href]'), target = link && (demoTarget(link) || videoTarget(link));
       if (!target) return;
       event.preventDefault();
       target.dispatchEvent(new root.CustomEvent('blog-media-reveal', {bubbles: true, detail: {target}}));
