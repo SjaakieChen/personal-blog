@@ -88,8 +88,10 @@ test('known PDF previews resolve on the current site and keep a stable public do
 });
 
 test('legacy type-order metadata no longer changes a known PDF', () => {
-  const data = require('../_data/evidence.json'), entry = data['/evidence/ct-scanner/'];
-  assert.deepEqual(pdfManifest({'/evidence/ct-scanner/': {...entry, media_order: ['pdf', 'image', 'video']}}, 'https://private.example/'),
+  const entry = {pdf: '/assets/evidence/example/poster.pdf', title: 'Example poster',
+    previews: ['/assets/evidence/example/page-1.webp']};
+  const data = {'/evidence/example/': entry};
+  assert.deepEqual(pdfManifest({'/evidence/example/': {...entry, media_order: ['pdf', 'image', 'video']}}, 'https://private.example/'),
     pdfManifest(data, 'https://private.example/'));
 });
 
