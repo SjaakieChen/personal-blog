@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "CT scanner: object reconstruction using shadows"
+title: "Project: shadow CT scanner"
 quote: ""
 render_with_liquid: false
 reference_key: "a0260f48-c86d-4684-914d-60ac6fc3f53f"
