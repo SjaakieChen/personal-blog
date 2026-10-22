@@ -61,7 +61,7 @@
     else if(!githubHealthy || cloudSynced!==JSON.stringify(draftSnapshot()))queueSync(800);
   }
   async function syncDesk() {
-    if(!isPrivate){handoff(false);return;}
+    if(!isPrivate){if(await save())await refreshIndex();return;}
     if(syncing){syncAgain=true;return;}
     clearTimeout(syncTimer);syncTimer=null;
     if(!navigator.onLine){paintSync();return;}
