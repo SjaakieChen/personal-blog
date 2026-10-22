@@ -20,6 +20,7 @@ permalink: /write/
 <p id="index-status" class="side-status" role="status"></p>
 </aside>
 <main class="main" id="writing-main">
+<div class="editor-chrome">
 <div class="editor-tools" role="toolbar" aria-label="Text formatting">
 <button data-command="bold" type="button" aria-label="Bold" aria-pressed="false"><b>B</b></button>
 <button data-command="italic" type="button" aria-label="Italic" aria-pressed="false"><i>I</i></button>
@@ -34,6 +35,12 @@ permalink: /write/
 <button id="connect-github" class="connection-dot" data-connected="false" type="button" aria-label="Open private writing desk" title="Open private writing desk"></button>
 <button id="download" type="button">Save JSON</button>
 <button id="restore" type="button">Import JSON</button><input id="restore-file" type="file" accept="application/json,.json" hidden>
+</div>
+<section id="publish-panel" class="publish-panel" hidden aria-label="Publishing status">
+<h2 id="publish-heading">Publish</h2><p id="publication-status" role="status" aria-atomic="true"></p>
+<div id="github-login" hidden><p>Enter this code on GitHub: <strong id="github-code"></strong></p><a class="button primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a><p>Sign in as SjaakieChen. Yoga remembers your connection; your GitHub credential stays on the private server.</p></div>
+<a id="view-published" hidden target="_blank" rel="noopener noreferrer">View post ↗</a>
+</section>
 </div>
 <div class="reading-column">
 <p id="published-version" class="editor-status" hidden>Published version</p>
@@ -50,11 +57,6 @@ permalink: /write/
 <aside id="evidence-media-preview" class="post-media" aria-label="Media preview" hidden></aside>
 </article>
 <p id="save-status" class="editor-status" role="status"></p>
-<section id="publish-panel" class="publish-panel" hidden aria-label="Publishing status">
-<h2 id="publish-heading">Publish</h2><p id="publication-status" role="status"></p>
-<div id="github-login" hidden><p>Enter this code on GitHub: <strong id="github-code"></strong></p><a class="button primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a><p>Sign in as SjaakieChen. Yoga remembers your connection; your GitHub credential stays on the private server.</p></div>
-<a id="view-published" hidden target="_blank" rel="noopener noreferrer">View post ↗</a>
-</section>
 </div></main></div>
 <dialog id="delete-dialog" aria-labelledby="delete-heading">
 <h2 id="delete-heading">Delete published post?</h2>

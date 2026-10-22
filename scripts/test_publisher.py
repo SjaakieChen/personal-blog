@@ -2,7 +2,10 @@ import base64
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import unittest
 import tempfile
 from unittest.mock import patch
@@ -10,6 +13,67 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('publisher', Path(__file__).resolve().parents[1]/'publisher/server.py')
 publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
+
+
+class FakeGit:
+    """Git Data API fixture: only the ref update changes visible repository files."""
+    def __init__(self, files):
+        self.blobs, self.trees, self.commits, self.calls = {}, {}, {}, []
+        self.race = False
+        self.lose_response = False
+        self.head = 'initial'
+        tree = {}
+        for name, raw in files.items():
+            sha = publisher.git_blob_sha(raw); self.blobs[sha] = raw
+            tree[name] = {'path': name, 'mode': '100644', 'type': 'blob', 'sha': sha}
+        tree_sha = self.store_tree(tree)
+        self.commits[self.head] = {'sha': self.head, 'tree': {'sha': tree_sha}, 'committer': {'date': '2026-10-22T18:00:00Z'}}
+
+    def store_tree(self, tree):
+        sha = publisher.git_blob_sha(json.dumps(tree, sort_keys=True).encode())
+        self.trees[sha] = tree
+        return sha
+
+    def visible(self):
+        tree = self.trees[self.commits[self.head]['tree']['sha']]
+        return {name: self.blobs[item['sha']] for name, item in tree.items()}
+
+    def __call__(self, endpoint, method='GET', payload=None):
+        prefix = 'repos/'+publisher.REPO+'/git/'
+        assert endpoint.startswith(prefix), endpoint
+        route = endpoint[len(prefix):]
+        self.calls.append((method, route, payload))
+        if method == 'GET':
+            if route == 'ref/heads/main': return {'object': {'sha': self.head}}
+            if route.startswith('commits/'): return self.commits[route[len('commits/'):]]
+            if route.startswith('trees/'):
+                return {'tree': list(self.trees[route[len('trees/'):].split('?')[0]].values()), 'truncated': False}
+            if route.startswith('blobs/'):
+                return {'content': base64.b64encode(self.blobs[route[len('blobs/'):]]).decode()}
+        if method == 'POST' and route == 'blobs':
+            assert payload['encoding'] == 'base64'
+            raw = base64.b64decode(payload['content']); sha = publisher.git_blob_sha(raw)
+            self.blobs[sha] = raw
+            return {'sha': sha}
+        if method == 'POST' and route == 'trees':
+            tree = dict(self.trees[payload['base_tree']])
+            for item in payload['tree']: tree[item['path']] = item
+            return {'sha': self.store_tree(tree)}
+        if method == 'POST' and route == 'commits':
+            sha = publisher.git_blob_sha(json.dumps(payload, sort_keys=True).encode())
+            self.commits[sha] = {'sha': sha, 'tree': {'sha': payload['tree']}, 'parents': payload['parents'], 'committer': {'date': '2026-10-22T19:00:00Z'}}
+            return self.commits[sha]
+        if method == 'PATCH' and route == 'refs/heads/main':
+            assert payload['force'] is False
+            if self.race:
+                error = RuntimeError('Concurrent push'); error.status = 409; raise error
+            assert self.commits[payload['sha']]['parents'] == [self.head]
+            self.head = payload['sha']
+            if self.lose_response:
+                self.lose_response = False
+                error = RuntimeError('Lost response'); error.status = 502; raise error
+            return {'object': {'sha': self.head}}
+        raise AssertionError((method, route))
 
 
 class PublishingTests(unittest.TestCase):
@@ -122,13 +186,14 @@ class PublishingTests(unittest.TestCase):
                 self.skipTest('Creating symlinks is unavailable on this host')
             self.assertEqual(self.media_get('/assets/evidence/drafts/ib/link.pdf')[0], 404)
 
-    def test_publish_rejects_private_attachment_links_before_any_github_request(self):
+    def test_publish_rejects_missing_or_unsupported_private_attachments_before_github(self):
         prefix = publisher.PRIVATE_MEDIA_PREFIX
-        for link in [publisher.ORIGIN+prefix+'ib/paper.pdf', prefix+'ib/paper.pdf', prefix.replace('/', '%2F')+'ib/paper.pdf', prefix.replace('/', '&#47;')+'ib/paper.pdf', (publisher.ORIGIN+prefix+'ib/paper.pdf').replace('/', '\\/'), prefix+'demos/example/index.html', publisher.ORIGIN+prefix+'demos/example/index.html', '#media-image'+prefix+'imec/lenses.png', '#media-image'+prefix.replace('/', '%2F')+'imec/lenses.png']:
-            with self.subTest(link=link), patch.object(publisher, 'gh_api') as api:
-                with self.assertRaisesRegex(ValueError, 'Promote the attachment'):
-                    publisher.publish({'path': 'pages/private.md', 'content': '---\ntitle: "Private"\n---\n<p><a href="'+link+'">Paper</a></p>'})
-                api.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory, patch.object(publisher, 'STATE', Path(directory)):
+            for link in [publisher.ORIGIN+prefix+'ib/paper.pdf', prefix+'ib/paper.pdf', prefix.replace('/', '%2F')+'ib/paper.pdf', prefix.replace('/', '&#47;')+'ib/paper.pdf', (publisher.ORIGIN+prefix+'ib/paper.pdf').replace('/', '\\/'), prefix+'demos/example/index.html', publisher.ORIGIN+prefix+'demos/example/index.html', '#media-image'+prefix+'imec/lenses.png', '#media-image'+prefix.replace('/', '%2F')+'imec/lenses.png', 'https://other.example'+prefix+'ib/paper.pdf', prefix+'ib/%2e%2e/%2e%2e/github/token.pdf']:
+                with self.subTest(link=link), patch.object(publisher, 'gh_api') as api:
+                    with self.assertRaises(ValueError):
+                        publisher.publish({'path': 'pages/private.md', 'content': '---\ntitle: "Private"\n---\n<p><a href="'+link+'">Paper</a></p>'})
+                    api.assert_not_called()
 
     def test_media_manifest_is_valid_json_on_private_desk(self):
         handler=object.__new__(publisher.Handler)

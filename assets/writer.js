@@ -118,7 +118,7 @@
   function connectionStatus(connected) {
     githubHealthy=connected;paintSync();
   }
-  async function api(path,body,timeout=0) {
+  async function api(path,body,timeout=0,timeoutMessage='Sync request timed out. Drafts remain saved on this device.') {
     const controller=timeout?new AbortController():null;
     const timer=controller?setTimeout(()=>controller.abort(),timeout):null;
     try{
@@ -127,7 +127,7 @@
       if(!response.ok){const error=new Error(data.error || 'The server could not complete the request.');error.status=response.status;throw error;}
       return data;
     }catch(error){
-      if(controller?.signal.aborted)throw new Error('Sync request timed out. Drafts remain saved on this device.');
+      if(controller?.signal.aborted)throw new Error(timeoutMessage);
       throw error;
     }finally{clearTimeout(timer);}
   }
@@ -152,7 +152,7 @@
     if(authPolling)return;
     authPolling=true;$('connect-github').disabled=true;
     try {
-      const session=await api('/api/session');
+      const session=await api('/api/session',undefined,syncTimeout);
       connectionStatus(session.connected);
       if(session.connected){publicationStatus('Connected as '+session.login+'. Click Publish to send your post.');return;}
       await api('/api/auth/start',{});
@@ -199,7 +199,7 @@
       let d=current();publishingDraft=d;core.prepare(d);
       if(!isPrivate){handoff(true);return;}
       publishing=true;publicationRevision++;$('publish').disabled=true;$('publish').textContent='Publishing…';$('view-published').hidden=true;
-      const session=await api('/api/session');
+      const session=await api('/api/session',undefined,syncTimeout);
       connectionStatus(session.connected);
       if(!session.connected){pendingPublishId=d.id;publishing=false;$('publish').disabled=false;$('publish').textContent='Publish';await connectGitHub();return;}
       await refreshIndex();
@@ -210,29 +210,42 @@
       const fingerprint=JSON.stringify([d.title,d.quote,d.doc,d.kind,d.references,d.quoteReference,d.quoteLocator,d.notes]);
       if(!d.pendingPublication || d.pendingPublication.fingerprint!==fingerprint) {
         const prepared=core.prepare(d);d.targetPath=prepared.filename;
-        d.pendingPublication={fingerprint,path:prepared.filename,content:prepared.content};
+        d.pendingPublication={fingerprint,path:prepared.filename,content:prepared.content,baseSha:d.sourceSha || null};
       }
-      save();publicationStatus('Sending “'+d.title+'” to GitHub…');
       const prepared=d.pendingPublication;
-      const publishedWriting=writingFingerprint(d);
+      if(!Object.prototype.hasOwnProperty.call(prepared,'baseSha'))prepared.baseSha=d.sourceSha || null;
       const submitted=structuredClone(d);
       const originalDate=d.kind==='post'?JSON.parse(prepared.content.match(/^date: (.+)$/m)[1]):null;
       const permalink=d.kind==='page'?JSON.parse(prepared.content.match(/^permalink: (.+)$/m)[1]):null;
-      const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:d.sourceSha || null});
+      if(!await save())throw new Error('Could not save the publication request. Use Save JSON before trying again.');
+      publicationStatus('Sending “'+submitted.title+'” to GitHub…');
+      const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:prepared.baseSha},120000,'Publishing response timed out. Your draft is saved; retry safely.');
+      const replacements=result.linkReplacements || {}, publicSubmitted=core.replaceDraftLinks(submitted,replacements);
       const wasPublished=!!submitted.sourcePath;
       const live=drafts.find(item=>item.id===submitted.id);
-      const publication={sourcePath:prepared.path,sourceSha:result.sha,publishedFingerprint:publishedWriting};
+      const publication={sourcePath:prepared.path,sourceSha:result.sha,publishedFingerprint:writingFingerprint(publicSubmitted)};
       removedPaths.delete(prepared.path);
       if(submitted.kind==='post')publication.originalDate=originalDate;
       else publication.permalink=permalink;
       if(!result.unchanged){if(wasPublished)publication.editedAt=result.time;else publication.publishedAt=result.time;}
       // Sync may replace draft objects while GitHub is responding. Update the live
       // record, retaining anything typed after the submitted version was captured.
-      if(live){Object.assign(live,publication);delete live.pendingPublication;}
-      const saved={...submitted,...publication};
+      if(live){
+        Object.assign(live,core.replaceDraftLinks(live,replacements),publication);delete live.pendingPublication;
+        if(!publishedPreview && current()?.id===live.id){
+          // Change destinations in place: text nodes, selection and any new prose
+          // typed while the request was in flight must remain the user's own.
+          for(const link of $('body').closest('.post-copy').querySelectorAll('a[href]')){
+            const href=link.getAttribute('href');
+            if(Object.prototype.hasOwnProperty.call(replacements,href))link.setAttribute('href',replacements[href]);
+          }
+        }
+      }
+      const saved={...publicSubmitted,...publication};delete saved.pendingPublication;
       const entry={...saved,path:prepared.path,date:originalDate,html:core.render(saved.doc,core.usedReferences(saved),core.referenceKey(saved),saved.notes),references:core.usedReferences(saved),notes:core.usedNotes(saved.doc,saved.notes),referenceKey:saved.referenceKey || saved.id};
       published=[entry,...published.filter(p=>p.path!==entry.path)];indexRequest++;
       await save();refreshIndex();renderNav();if(current()?.id===submitted.id){timestamp(current());$('kind').disabled=true;updateDeleteButton();}
+      if(result.mediaPublished || Object.keys(replacements).length)window.dispatchEvent(new CustomEvent('blog-media-published'));
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
       if(current()?.id===submitted.id) {
         $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(saved.kind==='page'?saved.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;

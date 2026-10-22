@@ -19,6 +19,27 @@ test('note citations survive source cleanup and use the same reference destinati
   assert.deepEqual(core.usedReferences({...d,doc:[{runs:[{text:'No note'}]}]}),[]);
 });
 
+test('notes support several sources with locators while retaining legacy citations and exact prose',()=>{
+  const core=require('../assets/writer-core'),text='My exact note.\nWith <literal> text.';
+  const sources=[...references,{id:'source-2',title:'Second paper',url:'https://example.org/second'}];
+  const note={id:'n',text,reference:'source-1',locator:'p. 3',citations:[{reference:'source-1',locator:'p. 3'},{reference:'source-2',locator:'Section 2'},{reference:'source-2',locator:'Section 2'}]};
+  const d={...draft,doc:[{runs:[{text:'A sentence.',note:'n'}]}],notes:[note],references:sources};
+  assert.equal(core.validNotes(d.notes),true);assert.deepEqual(core.usedReferences(d),sources);
+  const html=renderNotes(d.doc,d.notes,'ref-test',sources);
+  assert.match(html,/My exact note\.<br>With &lt;literal&gt; text\./);
+  assert.equal((html.match(/class="citation"/g)||[]).length,2,'identical legacy and array citations render once');
+  assert.match(html,/href="#ref-test-1"/);assert.match(html,/href="#ref-test-2"/);
+  assert.match(html,/data-locator="p. 3"/);assert.match(html,/data-locator="Section 2"/);
+  const prepared=prepare(d).content;
+  assert.match(prepared,/Second paper/);assert.equal(note.text,text);assert.ok(prepared.includes('notes: '+JSON.stringify([note])));
+  assert.throws(()=>prepare({...d,references}),/explanation citation/);
+  assert.deepEqual(core.usedReferences({...d,doc:[{runs:[{text:'Detached note'}]}]}),[]);
+  for(const citations of [null,{},[{reference:''}],[{reference:'source-1',locator:42}],[null]]){
+    assert.equal(core.validNotes([{id:'n',text,citations}]),false);
+    assert.throws(()=>prepare({...d,notes:[{id:'n',text,citations}]}),/explanation needs text/);
+  }
+});
+
 test('targeted JSON updates retain identity and history and reject stale writing',()=>{
   const core=require('../assets/writer-core');
   const base={...draft,doc:[{runs:[{text:'Original text'}]}],sourcePath:'_posts/original.md',sourceSha:'abc',createdAt:'2026-10-15T00:00:00Z'};
@@ -127,6 +148,26 @@ test('media fragment links survive rendering and publishing without opening anot
   assert.equal(render([{runs:[{text:'Unsafe',link:'#bad%0Aid'}]}]),'<p>Unsafe</p>');
   const refs=[{id:'figure',title:'Figure',url:fragment}];
   assert.doesNotMatch(core.citation('figure',refs,'test','','Figure')+core.renderReferences(refs),/target=/);
+});
+
+test('publication media mappings change URL fields without changing prose, history or later edits',()=>{
+  const {replaceDraftLinks}=require('../assets/writer-core');
+  const privatePDF='/assets/evidence/drafts/example/paper.pdf',publicPDF='https://sjaakiechen.github.io/personal-blog/assets/evidence/example/paper.pdf';
+  const oldImage='#media-image/assets/evidence/drafts/example/image.png',newImage='#media-image/assets/evidence/example/image.png';
+  const original={...draft,doc:[{runs:[{text:'Read '+privatePDF,link:privatePDF,underline:true},{text:'Figure',link:oldImage},{text:'Other',link:'https://example.org/other'}]}],
+    references:[{id:'paper',title:privatePDF,url:privatePDF,savedUrl:privatePDF,note:privatePDF}],notes:[{id:'n',text:privatePDF}],
+    savedVersions:[{doc:[{runs:[{text:'Original',link:privatePDF}]}]}],pendingPublication:{path:'pages/example.md',content:privatePDF,baseSha:null}};
+  const before=structuredClone(original),mapping={[privatePDF]:publicPDF,[oldImage]:newImage};
+  const updated=replaceDraftLinks(original,mapping);
+  assert.deepEqual(original,before,'source snapshot is immutable');
+  assert.deepEqual(updated.doc[0].runs,[{text:'Read '+privatePDF,link:publicPDF,underline:true},{text:'Figure',link:newImage},{text:'Other',link:'https://example.org/other'}]);
+  assert.deepEqual(updated.references,[{id:'paper',title:privatePDF,url:publicPDF,savedUrl:publicPDF,note:privatePDF}]);
+  assert.deepEqual(updated.notes,original.notes);assert.deepEqual(updated.savedVersions,original.savedVersions);
+  assert.deepEqual(updated.pendingPublication,original.pendingPublication,'pending request remains byte-for-byte retryable');
+  assert.deepEqual(replaceDraftLinks(updated,mapping),updated,'mapping is idempotent');
+  const edited={...original,doc:[{runs:[{text:'Typed during publication',link:'/assets/evidence/drafts/new/paper.pdf'}]}]};
+  assert.deepEqual(replaceDraftLinks(edited,mapping).doc,edited.doc,'later text and changed links are retained');
+  for(const invalid of [[],null,{'old':'javascript:alert(1)'},{'old':42}])assert.throws(()=>replaceDraftLinks(original,invalid),/Invalid published media links/);
 });
 
 test('citation JSON validates schema and URLs and preserves the quoted text',()=>{

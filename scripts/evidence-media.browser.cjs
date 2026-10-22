@@ -160,6 +160,19 @@ const server = http.createServer((req, res) => {
     }, {manifest, origin}), true, 'named same-page media citations resolve directly and retain the first mention');
     assert.deepEqual(await page.locator('.evidence-pdf > figure').evaluateAll(figures => figures.map(figure => figure.id)), essayIDs, 'page IDs remain stable across rerenders');
 
+    const privateEntry = manifest['/private-example/'];
+    manifest['/private-example/'] = {...privateEntry,
+      pdf: '/assets/evidence/example/paper.pdf', download_url: '/assets/evidence/example/paper.pdf',
+      previews: privateEntry.previews.map(src => src.replace('/drafts/', '/'))};
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('blog-media-published')));
+    await page.waitForFunction(() => document.querySelector('.evidence-pdf a')?.getAttribute('href').endsWith('/assets/evidence/example/paper.pdf'));
+    assert.equal(await page.locator('#body').innerHTML(), jumpText, 'publishing media refreshes previews without changing writing');
+    assert.deepEqual(await page.locator('.evidence-pdf > figure').evaluateAll(figures => figures.map(figure => figure.id)), essayIDs,
+      'published previews retain the same in-page destinations');
+    assert.deepEqual(await page.locator('.evidence-pdf img').evaluateAll(images => images.map(image => image.getAttribute('src'))),
+      [1, 10, 16].map(number => origin + '/assets/evidence/example/page-' + number + '.webp'));
+    manifest['/private-example/'] = privateEntry;
+
     await page.goto(origin + '/archive');
     await page.waitForSelector('.evidence-pdf img');
     assert.equal(await page.locator('.post-body').innerHTML(), text, 'public fallback links stay in the text');

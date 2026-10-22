@@ -14,6 +14,19 @@
     try {return ['https:','http:'].includes(new URL(value).protocol)?value:'';} catch {return '';}
   }
   const linkTarget = url => url.startsWith('#')?'':' target="_blank" rel="noopener noreferrer"';
+  function replaceDraftLinks(draft, replacements={}) {
+    if(!replacements || typeof replacements!=='object' || Array.isArray(replacements)
+        || Object.values(replacements).some(url=>typeof url!=='string' || !safeURL(url)))throw new Error('Invalid published media links. Retry publishing to recover the result.');
+    const replace=url=>typeof url==='string' && Object.prototype.hasOwnProperty.call(replacements,url)?replacements[url]:url;
+    const result={...draft};
+    if(Array.isArray(draft.doc))result.doc=draft.doc.map(block=>({...block,runs:block.runs.map(run=>run.link===undefined?run:{...run,link:replace(run.link)})}));
+    if(Array.isArray(draft.references))result.references=draft.references.map(reference=>{
+      const updated={...reference};
+      for(const field of ['url','savedUrl'])if(reference[field]!==undefined)updated[field]=replace(reference[field]);
+      return updated;
+    });
+    return result;
+  }
   function parseCitation(data) {
     if(!data || data.type!=='blog-citation' || data.version!==1 || !data.source || typeof data.source!=='object' || Array.isArray(data.source)) throw new Error('Use a version 1 blog-citation JSON file.');
     const text=(value,name)=>{
@@ -49,12 +62,22 @@
   function usedReferences(draft) {
     const doc=draft.doc || plainDocument(draft.body || '');
     const ids=new Set(doc.flatMap(block=>block.runs.map(run=>run.reference).filter(Boolean)));
-    for(const note of usedNotes(doc,draft.notes))if(note.reference)ids.add(note.reference);
+    for(const note of usedNotes(doc,draft.notes))for(const source of noteCitations(note))ids.add(source.reference);
     if(draft.quote?.trim() && draft.quoteReference)ids.add(draft.quoteReference);
     return (draft.references || []).filter(reference=>ids.has(reference.id));
   }
   function validNotes(notes) {
-    return Array.isArray(notes) && notes.every(n=>n && typeof n.id==='string' && n.id && typeof n.text==='string' && n.text.trim()) && new Set(notes.map(n=>n.id)).size===notes.length;
+    const validSource=source=>source && typeof source.reference==='string' && source.reference.trim() && (source.locator===undefined || typeof source.locator==='string');
+    return Array.isArray(notes) && notes.every(n=>n && typeof n.id==='string' && n.id && typeof n.text==='string' && n.text.trim()
+      && (n.reference===undefined || n.reference==='' || validSource(n))
+      && (n.citations===undefined || Array.isArray(n.citations) && n.citations.every(validSource))) && new Set(notes.map(n=>n.id)).size===notes.length;
+  }
+  function noteCitations(note) {
+    const sources=[...(note.reference?[{reference:note.reference,locator:note.locator || ''}]:[]),...(Array.isArray(note.citations)?note.citations:[])],seen=new Set();
+    return sources.filter(source=>{
+      const key=JSON.stringify([source.reference,source.locator || '']);
+      if(seen.has(key))return false;seen.add(key);return true;
+    });
   }
   function usedNotes(doc, notes=[]) {
     const ids=[...new Set(doc.flatMap(b=>b.runs.map(r=>r.note).filter(Boolean)))];
@@ -67,7 +90,7 @@
   function renderNotes(doc, notes=[], key='preview', references=[]) {
     const used=usedNotes(doc,notes);
     if(!used.length)return '';
-    return '<section class="explanation-notes" data-notes="true" aria-label="Notes"><h2>Notes</h2><ul>'+used.map((n,i)=>'<li id="'+escapeHTML(key)+'-note-'+(i+1)+'"><span class="note-symbol" aria-label="Explanation '+(i+1)+'">'+'*'.repeat(i+1)+'</span><div class="note-text">'+escapeHTML(n.text).replace(/\n/g,'<br>')+(n.reference?citation(n.reference,references,key,n.locator || ''):'')+'</div></li>').join('')+'</ul></section>';
+    return '<section class="explanation-notes" data-notes="true" aria-label="Notes"><h2>Notes</h2><ul>'+used.map((n,i)=>'<li id="'+escapeHTML(key)+'-note-'+(i+1)+'"><span class="note-symbol" aria-label="Explanation '+(i+1)+'">'+'*'.repeat(i+1)+'</span><div class="note-text">'+escapeHTML(n.text).replace(/\n/g,'<br>')+noteCitations(n).map(source=>citation(source.reference,references,key,source.locator || '')).join('')+'</div></li>').join('')+'</ul></section>';
   }
   function render(doc, references=[], key='preview', notes=[]) {
     if (!validDocument(doc)) throw new Error('Invalid draft text.');
@@ -94,7 +117,7 @@
     if(!Array.isArray(availableReferences) || availableReferences.some(r=>!r || typeof r.id!=='string' || !r.title?.trim() || !safeURL(r.url) || (r.savedUrl && !safeURL(r.savedUrl))) || new Set(availableReferences.map(r=>r.id)).size!==availableReferences.length) throw new Error('Each reference needs a title and a valid source link.');
     const references=usedReferences(draft);
     const hasReference=id=>references.some(r=>r.id===id);
-    if(usedNotes(doc,notes).some(n=>n.reference && !hasReference(n.reference)))throw new Error('An explanation citation is missing its reference.');
+    if(usedNotes(doc,notes).some(n=>noteCitations(n).some(source=>!hasReference(source.reference))))throw new Error('An explanation citation is missing its reference.');
     if(draft.quote?.trim() && !hasReference(draft.quoteReference)) throw new Error('Choose a reference for the opening quote before publishing.');
     for(const block of doc)for(const run of block.runs) {
       if((run.reference && !hasReference(run.reference)) || (run.quoted && !hasReference(run.reference))) throw new Error('Every quotation and citation needs a reference.');
@@ -135,7 +158,7 @@
     delete updated.pendingPublication;
     return updated;
   }
-  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,referenceKey,citation,renderReferences,usedReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes,updateSignature,applyDraftUpdate};
+  const api={escapeHTML,plainDocument,validDocument,render,prepare,safeURL,replaceDraftLinks,referenceKey,citation,renderReferences,usedReferences,parseCitation,validNotes,usedNotes,noteMarker,renderNotes,updateSignature,applyDraftUpdate};
   root.BlogWriter=api;
   if(typeof module!=='undefined' && module.exports) module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

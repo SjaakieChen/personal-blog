@@ -543,12 +543,21 @@
     const source = root.document.currentScript?.src;
     if (source) {
       const assetBase = new URL('../', source);
-      root.fetch(new URL('assets/evidence/media.json', assetBase)).then(response => {
-        if (!response.ok) throw new Error('Media manifest unavailable');
-        return response.json();
-      }).then(data => { entries = pdfManifest(data, assetBase);refresh(); }).catch(() => {
-        // Text links, video embeds and server-rendered PDF previews remain usable.
-      });
+      let request = 0;
+      const loadManifest = () => {
+        const current = ++request;
+        return root.fetch(new URL('assets/evidence/media.json', assetBase), {cache: 'no-store'}).then(response => {
+          if (!response.ok) throw new Error('Media manifest unavailable');
+          return response.json();
+        }).then(data => {
+          if (current !== request) return;
+          entries = pdfManifest(data, assetBase);refresh();
+        }).catch(() => {
+          // Text links, video embeds and existing PDF previews remain usable.
+        });
+      };
+      root.addEventListener('blog-media-published', loadManifest);
+      loadManifest();
     }
   }
 })(typeof window === 'object' ? window : globalThis);
