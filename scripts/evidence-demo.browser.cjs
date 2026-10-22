@@ -11,12 +11,14 @@ const source = '<p>Explore the <a href="' + demoPath + 'index.html">3D machine e
 const autoSource = '<p>Run the <a href="' + demoPath + 'index.html">Laughing / crying NCA</a>.</p>'
   + '<p><a href="' + demoPath + 'index.html?load=auto#again">Same live demo</a></p>';
 const requests = [];
+const twoSources = (prefix, privateAssets) => ['example', 'game-of-life-sender-receiver'].map((name, index) =>
+  '<p' + (index ? ' style="margin-top:1100px"' : '') + '>Explore <a href="' + prefix + '/assets/evidence/' + (privateAssets ? 'drafts/' : '') + 'demos/' + name + '/index.html?load=auto">' + (index ? 'Game of Life' : 'Neural cellular automaton') + '</a>.</p>').join('');
 let origin;
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  if (pathname.startsWith(demoPath)) {
+  if (/^\/(?:personal-blog\/)?assets\/evidence\/(?:drafts\/)?demos\/[A-Za-z0-9_-]+\/(?:index\.html|demo\.js|demo\.css)$/.test(pathname)) {
     requests.push(pathname);
     res.setHeader('Content-Security-Policy', `sandbox allow-scripts; default-src 'none'; script-src ${origin}; style-src ${origin}; img-src ${origin} data:; connect-src 'none'; object-src 'none'; frame-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`);
     if (pathname.endsWith('/index.html')) {
@@ -30,14 +32,21 @@ const server = http.createServer((req, res) => {
     if (pathname.endsWith('/demo.css')) {res.setHeader('Content-Type', 'text/css');res.end('body{background:rgb(230,240,250);margin:12px}');return;}
   }
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+  if (['/writer-two', '/personal-blog/archive-two', '/personal-blog/feed-two'].includes(pathname)) {
+    const writer = pathname === '/writer-two', prefix = writer ? '' : '/personal-blog', content = twoSources(prefix, writer);
+    const article = id => '<article id="' + id + '" class="post"><div class="post-copy"><h1>Two demos</h1><div class="post-body" ' + (writer ? 'id="body" contenteditable="true"' : '') + '>' + content + '</div></div><aside class="post-media" ' + (writer ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article>';
+    res.setHeader('Content-Type', 'text/html');
+    res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="' + prefix + '/styles.css"><script src="' + prefix + '/assets/links.js" defer></script><script src="' + prefix + '/assets/evidence-media.js" defer></script><div class="reading-column">' + article('first') + (pathname.endsWith('/feed-two') ? article('second') : '') + '</div>');return;
+  }
   if (['/writer', '/archive', '/writer-auto', '/archive-auto'].includes(pathname)) {
     const writer = pathname.startsWith('/writer'), content = pathname.endsWith('-auto') ? autoSource : source;
     res.setHeader('Content-Type', 'text/html');
     res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><script src="/assets/evidence-media.js" defer></script><div class="reading-column"><article class="post"><div class="post-copy"><h1>Research</h1><div class="post-body" ' + (writer ? 'id="body" contenteditable="true"' : '') + '>' + content + '</div></div><aside class="post-media" ' + (writer ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article></div>');return;
   }
-  if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end('{}');return;}
-  if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
-    res.setHeader('Content-Type', pathname.endsWith('.js') ? 'application/javascript' : 'text/css');res.end(fs.readFileSync(path.join(root, pathname)));return;
+  const localPath = pathname.replace(/^\/personal-blog(?=\/)/, '');
+  if (localPath === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end('{}');return;}
+  if (['/styles.css', '/assets/evidence-media.js', '/assets/links.js'].includes(localPath)) {
+    res.setHeader('Content-Type', localPath.endsWith('.js') ? 'application/javascript' : 'text/css');res.end(fs.readFileSync(path.join(root, localPath)));return;
   }
   res.writeHead(404);res.end();
 });
@@ -184,6 +193,59 @@ const server = http.createServer((req, res) => {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'inline media fits narrow screens');
     await page.setViewportSize({width: 1280, height: 900});
 
+    // Exercise the real link handler in its normal script order. Two distinct
+    // text links select their own existing frame in editable and public pages.
+    for (const route of ['/writer-two', '/personal-blog/archive-two', '/personal-blog/feed-two']) {
+      await page.goto(origin + route);
+      const frames = page.locator('.evidence-demo iframe');
+      await page.waitForFunction(count => document.querySelectorAll('.evidence-demo iframe').length === count,
+        route.endsWith('/feed-two') ? 4 : 2);
+      for (const iframe of await frames.all()) await iframe.contentFrame().getByRole('button', {name: 'Initialize'}).click();
+      await page.waitForFunction(() => [...document.querySelectorAll('.evidence-demo')].every(block => block.dataset.state === 'ready'));
+      const originalBodies = await page.locator('.post-body').evaluateAll(bodies => bodies.map(body => body.innerHTML));
+      const beforeClick = requests.length, pagesBefore = page.context().pages().length, urlBefore = page.url();
+      await page.evaluate(() => {
+        window.originalFrames = [...document.querySelectorAll('.evidence-demo iframe')];
+        window.selectedDemo = null;
+        document.addEventListener('blog-media-reveal', event => { window.selectedDemo = event.target; });
+      });
+      const articles = await page.locator('.post').all();
+      for (const [articleIndex, article] of articles.entries()) {
+        assert.deepEqual(await article.locator('.evidence-demo').evaluateAll(blocks => blocks.map(block => block.id)),
+          ['media-demo-example', 'media-demo-game-of-life-sender-receiver'].map(id => id + (articleIndex ? '--instance-2' : '')),
+          'demo anchors remain stable across draft/public routes; repeated feed instances have unique anchors');
+        for (let index = 0; index < 2; index++) {
+          await article.locator('.post-body a').nth(index).click();
+          assert.equal(await article.evaluate((post, i) => window.selectedDemo === post.querySelectorAll('.evidence-demo')[i], index), true,
+            'the text link reveals only its same-article frame');
+          assert.equal(page.url(), urlBefore);assert.equal(page.context().pages().length, pagesBefore);
+        }
+      }
+      assert.equal(requests.length, beforeClick, 'text links do not navigate or request another copy of the demo');
+      assert.equal(await page.locator('.evidence-demo').evaluateAll(blocks => new Set(blocks.map(block => block.id)).size === blocks.length), true);
+      assert.equal(await page.evaluate(() => originalFrames.every((frame, i) => frame === document.querySelectorAll('.evidence-demo iframe')[i])), true,
+        'the same live iframe and its simulation state survive navigation');
+      assert.deepEqual(await page.locator('.post-body').evaluateAll(bodies => bodies.map(body => body.innerHTML)), originalBodies,
+        'demo link navigation leaves serialized writing untouched');
+      const modifiers = await page.locator('.post-body a').first().evaluate(link => ['ctrlKey', 'metaKey', 'shiftKey', 'altKey'].map(modifier => {
+        let prevented;
+        const stop = event => { prevented = event.defaultPrevented;event.preventDefault(); };
+        document.addEventListener('click', stop, {capture: true, once: true});
+        link.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, [modifier]: true}));
+        return prevented;
+      }));
+      assert.deepEqual(modifiers, [false, false, false, false], 'modifier clicks retain ordinary link behavior');
+      if (route === '/writer-two') {
+        await page.locator('#body a').last().evaluate(link => { link.href = link.pathname; });
+        const second = page.locator('.evidence-demo').last();
+        await second.getByRole('button', {name: 'Load emulator', exact: true}).waitFor();
+        const beforeLazyClick = requests.length;
+        await page.locator('#body a').last().click();
+        assert.equal(await second.getAttribute('data-state'), 'idle');assert.equal(await second.locator('iframe').count(), 0);
+        assert.equal(requests.length, beforeLazyClick, 'text navigation preserves the explicit lazy-loading gate');
+      }
+    }
+
     // Shorten only the host readiness timeout, then exercise a silent iframe.
     await page.addInitScript(() => {
       const originalTimeout = window.setTimeout;
@@ -214,6 +276,6 @@ const server = http.createServer((req, res) => {
     assert.match(await pane.getByRole('status').textContent(), /could not load/i);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'inline retry state fits narrow screens');
     assert.deepEqual(errors, []);
-    console.log('Demo browser checks passed: manual lazy loading/fullscreen, opt-in inline autoload without host controls/captions/status, exact-window readiness, CSP isolation, redraw preservation, mode changes, lifecycle, retry, timeout, and clean draft links.');
+    console.log('Demo browser checks passed: same-article text-link navigation for two demos in editable/public/feed pages, stable unique anchors, unchanged frames/links, modifier semantics, manual lazy loading/fullscreen, opt-in inline autoload, exact-window readiness, CSP isolation, redraw preservation, mode changes, retry and timeout.');
   } finally {await browser.close();await new Promise(resolve => server.close(resolve));}
 })().catch(error => {console.error(error);server.close();process.exitCode = 1;});

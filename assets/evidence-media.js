@@ -171,6 +171,16 @@
       && block.dataset.mediaKey === 'image:' + url) || null;
   }
 
+  function demoTarget(link) {
+    const body = link.closest('.post-body');
+    if (!body || link.closest('.references, [data-references], .explanation-notes, [data-notes]')) return null;
+    const url = demoURL(link.getAttribute('href'), link.ownerDocument.baseURI, siteBase);
+    const pane = body.closest('.post')?.querySelector(':scope > .post-media');
+    if (!url || !pane || pane.hidden) return null;
+    return [...pane.children].find(block => !block.hidden && block.classList.contains('evidence-demo')
+      && ['demo:' + url, 'demo:auto:' + url].includes(block.dataset.mediaKey)) || null;
+  }
+
   function createDemo(doc, block, item) {
     block.className = 'evidence-demo';block.dataset.state = 'idle';
     const autoLoad = item.autoLoad === true;
@@ -437,6 +447,15 @@
         block.querySelector('a').setAttribute('aria-label', 'Open full-size image: ' + item.title);
         block.querySelector('figcaption').textContent = item.title;
       } else if (item.type === 'demo') {
+        // The same demo keeps its anchor when promoted from drafts to public
+        // assets, independently of the site's mount path and loading mode.
+        const id = 'media-demo-' + new URL(item.url).pathname.split('/').at(-2);
+        let unique = id, instance = 2;
+        while (blocks.some(other => other.id === unique)
+            || (body.ownerDocument.getElementById(unique) && body.ownerDocument.getElementById(unique) !== block)) {
+          unique = id + '--instance-' + instance++;
+        }
+        block.id = unique;
         block.querySelector('figcaption').textContent = item.title;
         const frame = block.querySelector('iframe');
         if (frame) frame.title = item.title;
@@ -531,10 +550,20 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;
+    // Run before the document's external-link handler. Keep source hrefs
+    // editable and serialized unchanged; modifier clicks retain normal links.
+    root.addEventListener('click', event => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest?.('a[href]'), target = link && demoTarget(link);
+      if (!target) return;
+      event.preventDefault();
+      target.dispatchEvent(new root.CustomEvent('blog-media-reveal', {bubbles: true, detail: {target}}));
+      target.scrollIntoView({block: 'start'});
+    }, true);
     let entries = [];
     const body = root.document.getElementById('body');
     const pane = root.document.getElementById('evidence-media-preview');
