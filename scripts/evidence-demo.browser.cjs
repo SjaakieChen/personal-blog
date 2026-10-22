@@ -109,6 +109,14 @@ const server = http.createServer((req, res) => {
         'inline media has no visible load or unload gate');
       assert.doesNotMatch(await pane.innerText(), /\bemulator\b/i, 'inline media does not use emulator-specific chrome');
       assert.equal(await pane.getByRole('button', {name: 'Retry', exact: true}).count(), expectRetry ? 1 : 0);
+      assert.equal(await pane.getByRole('button').count(), expectRetry ? 1 : 0,
+        'inline media exposes only Retry after failure, with no fullscreen control');
+      assert.equal(await pane.getByRole('link').count(), 0, 'inline media has no Open demo link');
+      assert.equal(await pane.locator('figcaption:visible').count(), 0, 'inline media has no visible caption');
+      assert.equal(await pane.getByRole('status').count(), expectRetry ? 1 : 0,
+        'inline media shows host status only for a recoverable error');
+      if (!expectRetry) assert.equal((await pane.innerText()).trim(), '',
+        'loading and ready inline media show only the embedded demo, with no host text');
     };
     const beforeAuto = requests.length;
     await page.goto(origin + '/writer-auto');
@@ -162,10 +170,6 @@ const server = http.createServer((req, res) => {
     await frame.getByRole('button', {name: 'Initialize'}).click();
     await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'ready');
     await assertInlineControls();
-    await pane.getByRole('button', {name: 'Fullscreen', exact: true}).click();
-    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('evidence-demo'));
-    await page.evaluate(() => document.exitFullscreen());
-    await page.waitForFunction(() => !document.fullscreenElement);
     await page.locator('#body').evaluate(body => { body.innerHTML = '<p>Plain writing.</p>'; });
     await page.waitForFunction(() => document.querySelector('.post-media').hidden);
     assert.equal(await pane.count(), 0, 'removing inline references disposes the frame and media block');
@@ -210,6 +214,6 @@ const server = http.createServer((req, res) => {
     assert.match(await pane.getByRole('status').textContent(), /could not load/i);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'inline retry state fits narrow screens');
     assert.deepEqual(errors, []);
-    console.log('Demo browser checks passed: manual lazy loading, opt-in inline autoload without emulator chrome, exact-window readiness, CSP isolation, redraw preservation, mode changes, lifecycle, retry, timeout, fullscreen, and clean draft links.');
+    console.log('Demo browser checks passed: manual lazy loading/fullscreen, opt-in inline autoload without host controls/captions/status, exact-window readiness, CSP isolation, redraw preservation, mode changes, lifecycle, retry, timeout, and clean draft links.');
   } finally {await browser.close();await new Promise(resolve => server.close(resolve));}
 })().catch(error => {console.error(error);server.close();process.exitCode = 1;});

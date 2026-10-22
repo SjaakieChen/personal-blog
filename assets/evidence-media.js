@@ -185,6 +185,7 @@
     open.textContent = autoLoad ? 'Open demo' : 'Open emulator';open.href = item.url;open.target = '_blank';open.rel = 'noopener noreferrer';
     status.className = 'evidence-demo-status';status.setAttribute('role', 'status');
     status.textContent = autoLoad ? 'Loading demo…' : 'Loads only when you choose to open it.';caption.textContent = item.title;
+    controls.hidden = open.hidden = status.hidden = caption.hidden = autoLoad;
     controls.append(load, unload, fullscreen, open);block.append(stage, controls, status, caption);
     block.addEventListener('fullscreenchange', () => {
       fullscreen.textContent = doc.fullscreenElement === block ? 'Exit fullscreen' : 'Fullscreen';
@@ -210,19 +211,20 @@
     });
     function start() {
       stop();block.dataset.state = 'loading';load.disabled = true;load.textContent = 'Loading…';
-      unload.hidden = autoLoad;status.hidden = false;status.textContent = autoLoad ? 'Loading demo…' : 'Loading emulator…';
+      unload.hidden = controls.hidden = status.hidden = autoLoad;status.textContent = autoLoad ? '' : 'Loading emulator…';
       const frame = doc.createElement('iframe');
       frame.title = caption.textContent;frame.setAttribute('sandbox', 'allow-scripts');
       frame.referrerPolicy = 'no-referrer';frame.allow = 'fullscreen';frame.allowFullscreen = true;
       let timer;
       const fail = () => {
         stop();block.dataset.state = 'error';load.hidden = false;load.textContent = 'Retry';status.hidden = false;
-        status.textContent = (autoLoad ? 'Demo' : 'Emulator') + ' could not load. Retry or open it in a separate tab.';
+        controls.hidden = false;
+        status.textContent = autoLoad ? 'Demo could not load. Retry.' : 'Emulator could not load. Retry or open it in a separate tab.';
       };
       const receive = event => {
         if (event.source !== frame.contentWindow) return;
         if (event.data?.type === 'blog-demo-ready') {
-          view.clearTimeout(timer);block.dataset.state = 'ready';load.hidden = true;fullscreen.hidden = false;
+          view.clearTimeout(timer);block.dataset.state = 'ready';load.hidden = true;fullscreen.hidden = autoLoad;
           status.hidden = autoLoad;status.textContent = autoLoad ? '' : 'Emulator ready.';
         } else if (event.data?.type === 'blog-demo-error') fail();
       };
