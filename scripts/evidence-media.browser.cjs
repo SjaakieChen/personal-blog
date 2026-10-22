@@ -102,7 +102,8 @@ const server = http.createServer((req, res) => {
       return {copy: {left: copy.left, right: copy.right, top: copy.top, width: copy.width}, media: {left: media.left, top: media.top, width: media.width}};
     });
     assert.ok(boxes.media.left > boxes.copy.right, 'desktop media is to the right of text');
-    assert.ok(Math.abs(boxes.media.top - boxes.copy.top) < 2, 'media begins beside title');
+    assert.ok(await page.evaluate(() => document.querySelector('.evidence-video').getBoundingClientRect().top
+      >= document.querySelector('#body a').getClientRects()[0].top - 1), 'video begins at or below its first mention');
     assert.ok(boxes.copy.width >= 350 && boxes.media.width >= 350, 'both columns remain useful at 1280px');
     if (process.env.MEDIA_SCREENSHOT) await page.screenshot({path: process.env.MEDIA_SCREENSHOT});
     await page.evaluate(() => { window.originalFrame = document.querySelector('iframe'); });

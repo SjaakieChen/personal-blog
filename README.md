@@ -45,6 +45,8 @@ Blog posts, the feed, Archive entries and the writing desk use a right-hand medi
 
 An ordinary same-site link to a PNG, JPEG or WebP under `assets/evidence/` also displays the image in that pane, with the link text as its caption. Clicking the image opens it full size. Repeated links show one image; the draft retains its ordinary links and needs no image manifest. Private screenshots can use the authenticated `/assets/evidence/drafts/<slug>/<filename>` route while the draft is being reviewed.
 
+Each media item starts alongside or below its first mention in the writing, with enough space to avoid overlapping earlier media. Positioning updates as text, fonts, images and the window size change. Media introduced in the hidden portion of a collapsed feed post appears only after Show more reveals that mention. On narrow screens media stacks below the text without desktop spacing.
+
 Private draft media can supply an authenticated `download_url` in the private manifest; it takes precedence over `public_pdf`. Keep private files and their metadata in the publisher's private state, outside the public repository. For selected preview pages from a longer paper, provide a `preview_pages` array aligned with `previews` and the original `total_pages` count, for example `[1, 10, 16]` and `22`. Captions retain those original page numbers, and every preview opens the full PDF. Existing full-poster preview lists need no extra fields.
 
 Complete multi-page poster previews display as a single carousel with Previous/Next buttons and a page count. The selected page stays in place while editing text. Representative pages from longer papers remain visible together; without JavaScript all poster pages remain readable. The PDF download link is always available.

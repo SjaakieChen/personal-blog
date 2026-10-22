@@ -3,6 +3,8 @@
   const scriptSource = root.document?.currentScript?.src;
   const siteBase = scriptSource ? new URL('../', scriptSource).href : null;
   const demoCleanup = new WeakMap();
+  const mediaAnchors = new WeakMap();
+  const paneLayouts = new WeakMap();
 
   function demoURL(value, base, assetBase) {
     if (typeof value !== 'string' || /[\\\s<>]/.test(value)) return null;
@@ -105,7 +107,7 @@
         : image ? {type: 'image', key: 'image:' + image, url: image, title: link.textContent.trim() || 'Project screenshot'}
         : demo ? {type: 'demo', key: 'demo:' + demo, url: demo, title: link.textContent.trim() || 'Interactive emulator'}
         : knownPdf(value, entries, body.ownerDocument.baseURI);
-      if (item && !media.has(item.key)) media.set(item.key, item);
+      if (item && !media.has(item.key)) media.set(item.key, {...item, anchor: link});
     }
     return [...media.values()];
   }
@@ -246,12 +248,65 @@
     controls.append(previous, status, next);block.append(controls);show(0);
   }
 
+  function alignPane(body, pane) {
+    const copy = body.closest('.post-copy') || body;
+    const sideBySide = pane.getBoundingClientRect().left >= copy.getBoundingClientRect().right;
+    const bodyBox = body.getBoundingClientRect();
+    const collapsed = body.classList.contains('post-collapsed');
+    for (const block of pane.children) {
+      if (body.ownerDocument.fullscreenElement === block) continue;
+      const anchor = mediaAnchors.get(block);
+      const mention = anchor && body.contains(anchor) ? anchor.getClientRects()[0] : null;
+      // Static fallbacks without a mention belong after the article. A clipped
+      // mention must be revealed by Show more before its media is shown.
+      const target = mention?.top ?? bodyBox.bottom;
+      block.hidden = collapsed && (!mention || mention.bottom > bodyBox.bottom);
+      if (block.hidden || !sideBySide) {
+        block.style.removeProperty('--media-offset');
+        continue;
+      }
+      const previousOffset = parseFloat(block.style.getPropertyValue('--media-offset')) || 0;
+      const naturalTop = block.getBoundingClientRect().top - previousOffset;
+      const offset = Math.max(0, target - naturalTop);
+      block.style.setProperty('--media-offset', offset + 'px');
+    }
+  }
+
+  function watchPaneLayout(body, pane) {
+    let layout = paneLayouts.get(pane);
+    if (!layout) {
+      let pending = false;
+      const schedule = () => {
+        if (pending) return;
+        pending = true;
+        root.requestAnimationFrame(() => { pending = false;alignPane(body, pane); });
+      };
+      const resize = new root.ResizeObserver(schedule);
+      const changes = new root.MutationObserver(schedule);
+      changes.observe(body.closest('.post-copy') || body, {childList: true, subtree: true,
+        characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden']});
+      root.addEventListener('resize', schedule);
+      body.ownerDocument.fonts?.ready.then(schedule);
+      layout = {resize, changes, schedule};
+      paneLayouts.set(pane, layout);
+    }
+    layout.resize.disconnect();
+    layout.resize.observe(body.closest('.post-copy') || body);
+    layout.resize.observe(body);
+    for (const block of pane.children) layout.resize.observe(block);
+    // Lay out immediately too, so a newly rendered frame does not flash above
+    // its introduction while waiting for resize/font notifications.
+    alignPane(body, pane);
+    layout.schedule();
+  }
+
   function renderPane(body, pane, entries = []) {
     const available = [...pane.children];
     const blocks = [];
     for (const item of mediaIn(body, entries)) {
       if (blocks.some(block => block.dataset.mediaKey === item.key)) continue;
       const block = available.find(block => block.dataset.mediaKey === item.key) || createMedia(body.ownerDocument, item);
+      mediaAnchors.set(block, item.anchor);
       if (item.type === 'video') {
         block.querySelector('iframe').title = item.title;
         block.querySelector('figcaption').textContent = item.title;
@@ -294,6 +349,7 @@
       if (pane.children[index] !== block) pane.insertBefore(block, pane.children[index] || null);
     });
     pane.hidden = !blocks.length;
+    watchPaneLayout(body, pane);
   }
 
   function moveInlineMedia(body, pane) {
@@ -309,6 +365,9 @@
       block.className = 'evidence-image';
       block.dataset.staticMedia = '';
       block.dataset.mediaKey = 'inline:' + pane.children.length;
+      const marker = body.ownerDocument.createElement('span');
+      marker.className = 'media-mention-marker';marker.setAttribute('aria-hidden', 'true');
+      content.before(marker);mediaAnchors.set(block, marker);
       block.append(content);pane.append(block);
       if (originalParent?.tagName === 'P' && !originalParent.textContent.trim() && !originalParent.children.length) originalParent.remove();
     }
