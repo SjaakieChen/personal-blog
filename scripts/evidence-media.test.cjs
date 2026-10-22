@@ -1,6 +1,60 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf} = require('../assets/evidence-media');
+const {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, alignPane, mediaFragmentTarget, revealMediaFragment} = require('../assets/evidence-media');
+
+test('collapsed previews hide complete media blocks that would cross Show more', () => {
+  let collapsed = true;
+  const doc = {fullscreenElement: null};
+  const copy = {getBoundingClientRect: () => ({right: 500})};
+  const body = {ownerDocument: doc, closest: () => copy, contains: () => true,
+    classList: {contains: () => collapsed}, getBoundingClientRect: () => ({top: 100, bottom: 720})};
+  const anchors = new WeakMap();
+  function block(top, height, mentionTop) {
+    let offset = '';
+    const node = {hidden: false, style: {
+      getPropertyValue: () => offset, setProperty: (_, value) => {offset = value;}, removeProperty: () => {offset = '';}
+    }, getBoundingClientRect: () => ({top: top + (parseFloat(offset) || 0), bottom: top + (parseFloat(offset) || 0) + height})};
+    anchors.set(node, {getClientRects: () => [{top: mentionTop, bottom: mentionTop + 20}]});
+    return node;
+  }
+  const fitting = block(100, 250, 150), overflowing = block(400, 400, 450), boundary = block(600, 120, 600);
+  const pane = {children: [fitting, overflowing, boundary], getBoundingClientRect: () => ({left: 550})};
+  alignPane(body, pane, anchors);
+  assert.equal(fitting.hidden, false, 'a complete preview that fits remains visible');
+  assert.equal(overflowing.hidden, true, 'a visible mention does not authorize a figure crossing the cutoff');
+  assert.equal(boundary.hidden, false, 'a figure ending exactly at the cutoff fits');
+  alignPane(body, pane, anchors);
+  assert.equal(overflowing.hidden, true, 'repeated layout leaves the oversized block hidden');
+  collapsed = false;alignPane(body, pane, anchors);
+  assert.ok(pane.children.every(node => !node.hidden), 'expanded and standalone posts retain all media');
+  collapsed = true;alignPane(body, pane, anchors);
+  assert.equal(overflowing.hidden, true, 'Show less restores the whole-post bound');
+  pane.getBoundingClientRect = () => ({left: 0});
+  overflowing.getBoundingClientRect = () => ({top: 800, bottom: 1200});
+  alignPane(body, pane, anchors);
+  assert.equal(overflowing.hidden, true, 'mobile media below the collapsed text stays hidden');
+});
+
+test('media fragments wait for generated targets and reveal a hidden carousel page without opening media', () => {
+  const actions = [], nodes = new Map();
+  const doc = {getElementById: id => nodes.get(id), defaultView: {CustomEvent: class {constructor(type, options) {this.type=type;Object.assign(this,options);}}}};
+  assert.equal(mediaFragmentTarget(doc, '#media-evidence--example-page-3'), null, 'an unfetched manifest has no target yet');
+  assert.equal(revealMediaFragment(doc, '#media-evidence--example-page-3'), false);
+  let collapsed = true;
+  const body = {ownerDocument: doc, classList: {contains: () => collapsed}, nextElementSibling: {click() {collapsed=false;actions.push('expand');}},
+    closest: () => ({getBoundingClientRect: () => ({right: 500})}), getBoundingClientRect: () => ({bottom: 1200})};
+  const pane = {children: [], getBoundingClientRect: () => ({left: 550}), closest: () => ({querySelector: () => body})};
+  const target = {closest: selector => selector === '.post-media' ? pane : null,
+    dispatchEvent(event) {assert.equal(event.type,'blog-media-reveal');assert.equal(event.detail.target,this);actions.push('select-page');},
+    scrollIntoView(options) {assert.equal(options.block,'start');actions.push('scroll');}};
+  nodes.set('media-evidence--example-page-3',target);
+  assert.equal(revealMediaFragment(doc, '#media-evidence--example-page-3'), true);
+  assert.deepEqual(actions,['expand','select-page','scroll'], 'expand and select the target before calculating the scroll');
+  assert.equal(revealMediaFragment(doc, '#ref-citation'),false,'ordinary article anchors are not intercepted');
+  assert.equal(revealMediaFragment(doc, '#media-bad%'),false,'malformed fragments are ignored');
+  nodes.set('media-outside',{closest: () => null});
+  assert.equal(revealMediaFragment(doc, '#media-outside'),false,'only targets in a media pane qualify');
+});
 
 test('interactive demos accept only same-site evidence entry documents', () => {
   const base = 'https://private.example:8446/write/', entry = '/assets/evidence/drafts/demos/imec-alignment/index.html';

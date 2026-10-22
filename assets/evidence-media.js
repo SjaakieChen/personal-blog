@@ -192,6 +192,36 @@
       && block.dataset.mediaKey === 'video:' + id) || null;
   }
 
+  function mediaFragmentTarget(doc, hash) {
+    let id;
+    try { id = decodeURIComponent((hash || '').slice(1)); } catch { return null; }
+    if (!hash?.startsWith('#media-')) return null;
+    const target = doc.getElementById(id);
+    return target?.closest('.post-media') ? target : null;
+  }
+
+  function revealMediaFragment(doc, hash) {
+    const target = mediaFragmentTarget(doc, hash);
+    if (!target) return false;
+    const pane = target.closest('.post-media'), article = pane.closest('.post');
+    const body = article?.querySelector('.post-body');
+    // A feed preview can hide the mention and its media. Use its normal
+    // expansion control so keyboard state and the button label stay correct.
+    if (body?.classList.contains('post-collapsed')) body.nextElementSibling?.click();
+    if (body) alignPane(body, pane);
+    target.dispatchEvent(new doc.defaultView.CustomEvent('blog-media-reveal', {bubbles: true, detail: {target}}));
+    target.scrollIntoView({block: 'start'});
+    return true;
+  }
+
+  function assignMediaId(block, id, siblings = []) {
+    let unique = id, instance = 2;
+    while (siblings.some(other => other.id === unique)
+        || (block.ownerDocument.getElementById(unique)
+        && block.ownerDocument.getElementById(unique) !== block)) unique = id + '--instance-' + instance++;
+    block.id = unique;
+  }
+
   function createDemo(doc, block, item) {
     block.className = 'evidence-demo';block.dataset.state = 'idle';
     const autoLoad = item.autoLoad === true;
@@ -394,27 +424,34 @@
     controls.append(previous, status, next);block.append(controls);show(0);
   }
 
-  function alignPane(body, pane) {
+  function alignPane(body, pane, anchors = mediaAnchors) {
     const copy = body.closest('.post-copy') || body;
     const sideBySide = pane.getBoundingClientRect().left >= copy.getBoundingClientRect().right;
     const bodyBox = body.getBoundingClientRect();
     const collapsed = body.classList.contains('post-collapsed');
     for (const block of pane.children) {
       if (body.ownerDocument.fullscreenElement === block) continue;
-      const anchor = mediaAnchors.get(block);
+      const anchor = anchors.get(block);
       const mention = anchor && body.contains(anchor) ? anchor.getClientRects()[0] : null;
       // Static fallbacks without a mention belong after the article. A clipped
       // mention must be revealed by Show more before its media is shown.
       const target = mention?.top ?? bodyBox.bottom;
       block.hidden = collapsed && (!mention || mention.bottom > bodyBox.bottom);
-      if (block.hidden || !sideBySide) {
+      if (block.hidden) {
         block.style.removeProperty('--media-offset');
         continue;
       }
-      const previousOffset = parseFloat(block.style.getPropertyValue('--media-offset')) || 0;
-      const naturalTop = block.getBoundingClientRect().top - previousOffset;
-      const offset = Math.max(0, target - naturalTop);
-      block.style.setProperty('--media-offset', offset + 'px');
+      if (!sideBySide) block.style.removeProperty('--media-offset');
+      else {
+        const previousOffset = parseFloat(block.style.getPropertyValue('--media-offset')) || 0;
+        const naturalTop = block.getBoundingClientRect().top - previousOffset;
+        const offset = Math.max(0, target - naturalTop);
+        block.style.setProperty('--media-offset', offset + 'px');
+      }
+      // Show more bounds the whole preview, including the media column. A
+      // figure is indivisible: hide it rather than letting its lower portion
+      // spill beyond the cutoff (or showing a clipped poster/video).
+      if (collapsed && block.getBoundingClientRect().bottom > bodyBox.bottom + 1) block.hidden = true;
     }
   }
 
@@ -425,7 +462,10 @@
       const schedule = () => {
         if (pending) return;
         pending = true;
-        root.requestAnimationFrame(() => { pending = false;alignPane(body, pane); });
+        root.requestAnimationFrame(() => {
+          pending = false;alignPane(body, pane);
+          body.ownerDocument.dispatchEvent(new root.CustomEvent('blog-media-layout'));
+        });
       };
       const resize = new root.ResizeObserver(schedule);
       const changes = new root.MutationObserver(schedule);
@@ -454,6 +494,7 @@
       const block = available.find(block => block.dataset.mediaKey === item.key) || createMedia(body.ownerDocument, item);
       mediaAnchors.set(block, item.anchor);
       if (item.type === 'video') {
+        assignMediaId(block, 'media-video-' + item.id, blocks);
         block.querySelector('iframe').title = item.title;
         block.querySelector('figcaption').textContent = item.title;
       } else if (item.type === 'image') {
@@ -464,13 +505,7 @@
       } else if (item.type === 'demo') {
         // The same demo keeps its anchor when promoted from drafts to public
         // assets, independently of the site's mount path and loading mode.
-        const id = 'media-demo-' + new URL(item.url).pathname.split('/').at(-2);
-        let unique = id, instance = 2;
-        while (blocks.some(other => other.id === unique)
-            || (body.ownerDocument.getElementById(unique) && body.ownerDocument.getElementById(unique) !== block)) {
-          unique = id + '--instance-' + instance++;
-        }
-        block.id = unique;
+        assignMediaId(block, 'media-demo-' + new URL(item.url).pathname.split('/').at(-2), blocks);
         block.dataset.demoTitle = item.title;
         block.querySelector('figcaption').textContent = demoCaptions.get(block) || item.title;
         const frame = block.querySelector('iframe');
@@ -566,10 +601,28 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, videoTarget, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, videoTarget, mediaFragmentTarget, revealMediaFragment, alignPane, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;
+    // CV and other external links arrive before dynamic media IDs exist.
+    // Retry after the manifest, fonts and media layout settle, but stop as
+    // soon as the reader interacts so late image loads cannot pull them back.
+    let pendingFragment = root.location.hash, fragmentScheduled = false;
+    const scheduleFragment = () => {
+      if (!pendingFragment || fragmentScheduled) return;
+      fragmentScheduled = true;
+      root.requestAnimationFrame(() => {
+        fragmentScheduled = false;
+        if (pendingFragment === root.location.hash) revealMediaFragment(root.document, pendingFragment);
+      });
+    };
+    const cancelFragment = () => { pendingFragment = ''; };
+    for (const event of ['wheel', 'touchstart', 'pointerdown', 'keydown']) root.addEventListener(event, cancelFragment, {passive: true});
+    root.addEventListener('hashchange', () => { pendingFragment = root.location.hash;scheduleFragment(); });
+    root.document.addEventListener('blog-media-layout', scheduleFragment);
+    root.document.addEventListener('load', scheduleFragment, true);
+    root.document.fonts?.ready.then(scheduleFragment);
     let highlighted = null, highlightTimer;
     root.document.addEventListener('blog-media-reveal', event => {
       const target = event.detail?.target || event.target;
@@ -597,8 +650,11 @@
     const body = root.document.getElementById('body');
     const pane = root.document.getElementById('evidence-media-preview');
     const preview = body && pane ? watchPreview(body, pane, () => entries) : null;
-    const refresh = () => preview ? preview.render()
-      : root.document.querySelectorAll('.post-body').forEach(body => enhanceArticle(body, entries));
+    const refresh = () => {
+      if (preview) preview.render();
+      else root.document.querySelectorAll('.post-body').forEach(body => enhanceArticle(body, entries));
+      scheduleFragment();
+    };
     refresh();
     const source = root.document.currentScript?.src;
     if (source) {
