@@ -3,6 +3,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '..');
+const manifest = require('../_data/evidence.json'), ct = manifest['/evidence/ct-scanner/'];
 const video = 'https://www.youtube.com/watch?v=Abc_123-Xyz';
 const firstPost = fs.readFileSync(path.join(root, '_posts/2026-10-16-genesis-43e13b07.md'), 'utf8').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
 const paragraph = '<p>Some context before the example. A reader should encounter this explanation before seeing the related media, even when changing the window width.</p>';
@@ -11,28 +12,43 @@ const writerText = paragraph.repeat(5) + '<p id="introduction">Here is the <a hr
 const sequenceText = paragraph + '<p><a href="/assets/evidence/test/slow.png">Tall example image</a></p>'
   + '<p>Now see the <a href="' + video + '">demonstration</a>.</p>';
 const inlineText = paragraph.repeat(4) + '<p id="inline-context">The following chart illustrates this explanation.</p>'
-  + '<figure><img src="/assets/evidence/test/inline.png" alt="Inline example"><figcaption>Inline chart caption</figcaption></figure>' + paragraph;
+  + '<figure><img src="/assets/evidence/test/inline.png" alt="Inline example"><figcaption>Inline chart caption</figcaption></figure>'
+  + '<p>Then see the <a href="' + video + '">demonstration</a>.</p>' + paragraph;
+const numbered = (id, number) => '<sup class="citation"><a href="#ref-' + id + '">[' + number + ']</a></sup>';
+const referenceText = paragraph.repeat(2) + '<p id="poster-context">The scanner setup.' + numbered('poster', 1) + '</p>'
+  + paragraph.repeat(2) + '<p id="video-context">Our submission video.' + numbered('video', 2) + '</p>'
+  + paragraph + '<p id="image-context">The knight shadow.' + numbered('image', 3) + '</p>'
+  + '<p>An unsupported PDF.' + numbered('unknown', 4) + ' Another post’s reference.' + numbered('outside', 9) + '</p>'
+  + '<p><a href="' + video + '">Repeated direct video</a> and <a href="' + ct.public_pdf + '">Download poster</a>.</p>';
+const referenceList = '<section class="references"><ol>'
+  + '<li id="ref-poster"><a href="' + ct.public_pdf + '#page=1">Scanner poster</a></li>'
+  + '<li id="ref-video"><a href="' + video + '">Submission video</a></li>'
+  + '<li id="ref-image"><a href="/assets/evidence/test/inline.png">Knight shadow</a></li>'
+  + '<li id="ref-unknown"><a href="https://unrelated.example/paper.pdf">Unsupported PDF</a><span class="reference-copy"><a href="' + ct.public_pdf + '">Saved copy</a></span></li>'
+  + '<li id="ref-uncited"><a href="https://youtu.be/Zyx-321_cbA">Uncited video</a></li></ol></section>';
 function html(mode) {
-  const writer = mode === '/writer', feed = mode === '/feed';
-  const text = mode === '/first' || feed ? firstPost : writer ? writerText : mode === '/sequence' ? sequenceText : inlineText;
+  const refs = mode.startsWith('/references'), writer = mode === '/writer' || mode === '/references-writer', feed = mode === '/feed';
+  const text = refs ? referenceText : mode === '/first' || feed ? firstPost : writer ? writerText : mode === '/sequence' ? sequenceText : inlineText;
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<link rel="stylesheet" href="/styles.css"><script src="/assets/evidence-media.js" defer></script>'
     + (feed ? '<script src="/assets/feed.js" defer></script>' : '')
     + '</head><body><div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'
     + '<article class="post"><div class="post-copy"><h1>A contextual media example</h1><div class="post-date">16 October 2026</div>'
     + '<blockquote class="quote">An introductory quotation.</blockquote><div class="post-body" '
-    + (writer ? 'id="body" contenteditable="true"' : feed ? 'id="preview-first" data-post-preview' : '') + '>' + text + '</div>'
+    + (writer ? 'id="body" contenteditable="true"' : feed ? 'id="preview-first" data-post-preview' : '') + '>' + text + (refs && !writer ? referenceList : '') + '</div>'
+    + (refs && writer ? '<div id="reference-preview">' + referenceList + '</div>' : '')
     + (feed ? '<button class="show-more" type="button" aria-expanded="false" aria-controls="preview-first" hidden>Show more</button>' : '')
     + '</div><aside class="post-media" aria-label="Media" ' + (writer ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article>'
+    + (refs ? '<article class="post"><div class="post-copy"><div class="post-body"><p>Separate post.</p><section class="references"><ol><li id="ref-outside"><a href="https://youtu.be/Zyx-321_cbA">Other post video</a></li></ol></section></div></div><aside class="post-media" hidden></aside></article>' : '')
     + '</div></main></div></body></html>';
 }
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
-  if (['/first', '/writer', '/sequence', '/feed', '/inline'].includes(pathname)) {
+  if (['/first', '/writer', '/sequence', '/feed', '/inline', '/references-writer', '/references-public'].includes(pathname)) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');res.end(html(pathname));return;
   }
-  if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end('{}');return;}
-  if (pathname === '/assets/evidence/test/inline.png') {
+  if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end(JSON.stringify(manifest));return;}
+  if (pathname === '/assets/evidence/test/inline.png' || ct.previews.includes(pathname)) {
     res.setHeader('Content-Type', 'image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400"><rect width="800" height="400" fill="#dce5eb"/></svg>');return;
   }
   if (['/styles.css', '/assets/evidence-media.js', '/assets/feed.js'].includes(pathname)) {
@@ -142,10 +158,66 @@ async function waitForAlignedVideo(page, id = 'Abc_123-Xyz', close = false) {
     });
 
     await page.setViewportSize({width: 1280, height: 900});
+    for (const mode of ['/references-writer', '/references-public']) {
+      await page.goto(origin + mode);
+      await page.waitForSelector('.evidence-pdf-carousel');
+      await page.locator('.post-media img').evaluateAll(images => images.forEach(image => {image.loading = 'eager';}));
+      await page.waitForFunction(() => [...document.querySelectorAll('.post-media img')].every(image => image.complete && image.naturalWidth > 0));
+      const types = () => page.locator('article').first().locator('.post-media > [data-media-key]').evaluateAll(blocks => blocks.map(block => block.dataset.mediaKey.split(':')[0]));
+      assert.deepEqual(await types(), ['pdf', 'video', 'image'], 'numbered first mentions determine order, independent of type and later direct links');
+      assert.equal(await page.locator('.post-media iframe').count(), 1, 'uncited and other-article references do not embed');
+      assert.equal(await page.locator('.post-media .evidence-pdf').count(), 1, 'unsupported PDFs do not gain a preview');
+      assert.equal(await page.locator('.evidence-video figcaption').textContent(), 'Submission video', 'numbered citations use the source title, not the citation number');
+      const originalBody = await page.locator('.post-body').first().innerHTML();
+      await page.waitForFunction(() => {
+        const blocks = [...document.querySelector('.post-media').children];
+        const ids = ['poster-context', 'video-context', 'image-context'];
+        return blocks.every((block, index) => {
+          const box = block.getBoundingClientRect(), anchor = document.querySelector('#' + ids[index] + ' a').getClientRects()[0];
+          const previous = index ? blocks[index - 1] : null;
+          const nextFree = previous ? previous.getBoundingClientRect().bottom + parseFloat(getComputedStyle(previous).marginBottom) : 0;
+          return Math.abs(box.top - Math.max(anchor.top, nextFree)) <= 2;
+        });
+      });
+      if (mode === '/references-writer') {
+        await page.locator('.evidence-video iframe').evaluate(frame => {frame.loading = 'eager';});
+        await page.frameLocator('.evidence-video iframe').locator('title').waitFor({state: 'attached'});
+        const player = page.frames().find(frame => frame.url().includes('youtube-nocookie.com'));
+        await player.evaluate(() => {window.playbackMarker = 'keep-playing';});
+        await page.evaluate(() => {
+          window.heldPoster = document.querySelector('.evidence-pdf');window.heldPlayer = document.querySelector('.evidence-video iframe');
+          const text = document.querySelector('#body p').firstChild, range = document.createRange();
+          range.setStart(text, 9);range.collapse(true);getSelection().removeAllRanges();getSelection().addRange(range);
+          window.heldCaret = text;
+          document.querySelector('#ref-poster > a').href = 'https://unrelated.example/unsupported.pdf';
+        });
+        await page.waitForFunction(() => document.querySelector('.post-media').firstElementChild.classList.contains('evidence-video'));
+        assert.deepEqual(await types(), ['video', 'image', 'pdf'], 'changing a reference URL reanchors the existing poster to its later direct link');
+        assert.equal(await page.evaluate(() => heldPoster === document.querySelector('.evidence-pdf') && heldPlayer === document.querySelector('.evidence-video iframe') && getSelection().anchorNode === heldCaret && getSelection().anchorOffset === 9), true, 'reference edits preserve player, poster and editor caret');
+        await page.waitForLoadState('networkidle');
+        assert.equal(await player.evaluate(() => window.playbackMarker), 'keep-playing', 'reordering preserves the active iframe document rather than restarting playback');
+        assert.equal(await page.locator('#body').innerHTML(), originalBody, 'reference-driven layout never rewrites the body');
+        await page.locator('#ref-poster > a').evaluate((link, href) => {link.href = href;}, ct.public_pdf);
+        await page.waitForFunction(() => document.querySelector('.post-media').firstElementChild.classList.contains('evidence-pdf'));
+      }
+      for (const width of [390, 320]) {
+        await page.setViewportSize({width, height: 844});
+        await page.waitForFunction(() => {
+          const copy = document.querySelector('.post-copy').getBoundingClientRect(), blocks = [...document.querySelector('.post-media').children];
+          return blocks.every((block, index) => !block.style.getPropertyValue('--media-offset')
+            && block.getBoundingClientRect().top >= (index ? blocks[index - 1].getBoundingClientRect().bottom : copy.bottom));
+        });
+        assert.deepEqual(await types(), ['pdf', 'video', 'image'], 'mobile retains first-mention order below the writing');
+        assert.equal(await page.locator('.post-body').first().innerHTML(), originalBody);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.main').scrollWidth <= document.querySelector('.main').clientWidth + 1), width + 'px reference media do not overflow');
+      }
+      await page.setViewportSize({width: 1280, height: 900});
+    }
     await page.goto(origin + '/inline');
     await page.waitForSelector('.post-media img');
     await page.waitForFunction(() => document.querySelector('.post-media img').getBoundingClientRect().top >= document.querySelector('#inline-context').getBoundingClientRect().bottom - 1);
     assert.equal(await page.locator('.post-body img').count(), 0, 'public inline images move into the media pane');
+    assert.deepEqual(await page.locator('.post-media > [data-media-key]').evaluateAll(blocks => blocks.map(block => block.className)), ['evidence-image', 'evidence-video'], 'inline image markers and ordinary links share first-mention order');
     await page.setViewportSize({width: 972, height: 900});
     await page.waitForFunction(() => document.querySelector('.post-media img').getBoundingClientRect().top >= document.querySelector('#inline-context').getBoundingClientRect().bottom - 1);
     assert.deepEqual(errors, [], 'no browser errors during alignment updates');

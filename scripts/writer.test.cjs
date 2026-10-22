@@ -113,6 +113,22 @@ test('source links open separately while citation and explanation anchors stay o
   links.filter(a=>!anchors.includes(a)).forEach(a=>{assert.match(a,/target="_blank"/);assert.match(a,/rel="noopener noreferrer"/);});
 });
 
+test('media fragment links survive rendering and publishing without opening another window',()=>{
+  const core=require('../assets/writer-core');
+  const fragment='#media-evidence--ib-physics-extended-essay-page-16';
+  const doc=[{runs:[{text:'Results figure',link:fragment,underline:true},{text:'Full PDF',link:'https://example.org/paper.pdf'}]}];
+  const html=render(doc);
+  assert.match(html,/<a href="#media-evidence--ib-physics-extended-essay-page-16"><u>Results figure<\/u><\/a>/);
+  assert.match(html,/<a target="_blank" rel="noopener noreferrer" href="https:\/\/example.org\/paper.pdf">Full PDF<\/a>/);
+  assert.ok(prepare({...draft,doc}).content.includes(html));
+  assert.equal(doc[0].runs[0].link,fragment,'rendering leaves the source document unchanged');
+  for(const value of [fragment,'#reference-1','#figure%3A1','#r%C3%A9sultats'])assert.equal(core.safeURL(value),value);
+  for(const value of ['#','#bad id','#bad%20id','#bad%00id','#bad%0Aid','#bad%3Cid','#bad%5Cid','#bad%ZZ','javascript:alert(1)','//example.org'])assert.equal(core.safeURL(value),'',value);
+  assert.equal(render([{runs:[{text:'Unsafe',link:'#bad%0Aid'}]}]),'<p>Unsafe</p>');
+  const refs=[{id:'figure',title:'Figure',url:fragment}];
+  assert.doesNotMatch(core.citation('figure',refs,'test','','Figure')+core.renderReferences(refs),/target=/);
+});
+
 test('citation JSON validates schema and URLs and preserves the quoted text',()=>{
   const data=require('../assets/citations/genesis-1-3.json');
   const citation=parseCitation(data);

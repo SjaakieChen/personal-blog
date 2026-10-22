@@ -18,7 +18,7 @@ const privateText = '<p>Read the <a href="/assets/evidence/drafts/example/paper.
   + '<p><a href="https://sjaakiechen.github.io.example.org/personal-blog/assets/evidence/example/knight.png">Unrelated host</a></p>';
 const screenshot = '/assets/evidence/drafts/imec/alignment.webp';
 const staticText = '<p><a href="' + ownPublicImage + '">Knight shadow</a></p><p><a href="' + pdf + '">Original poster PDF</a></p>';
-const staticPane = '<div id="original-pdf-block" class="evidence-pdf" data-media-key="pdf:/assets/evidence/example/poster.pdf" data-static-media>'
+const staticPane = '<div data-original-pdf class="evidence-pdf" data-media-key="pdf:/assets/evidence/example/poster.pdf" data-static-media>'
   + [1, 2, 3].map(page => '<figure><a href="' + pdf + '"><img src="/assets/evidence/example/page-' + page + '.webp" alt="Server-rendered poster, page ' + page + '"></a><figcaption>Original poster · ' + page + ' / 3</figcaption></figure>').join('') + '</div>'
   + '<div data-media-key="inline:fallback" data-static-media><img src="/assets/evidence/example/page-2.webp" alt="Unreferenced fallback"></div>';
 const text = '<p>See the <a class="text-citation" data-reference="demo" data-label="demo" href="https://www.youtube.com/watch?v=Abc_123-Xyz">demo</a> for the alignment procedure.</p>'
@@ -29,11 +29,12 @@ const text = '<p>See the <a class="text-citation" data-reference="demo" data-lab
   + '<p><a href="' + screenshot + '#full-size">Same screenshot again</a></p>'
   + '<p><a href="https://external.example' + screenshot + '">External image stays a link</a></p>'
   + '<div class="references"><p><a href="https://youtu.be/Zyx-321_cbA">Reference only</a></p></div>';
-const ctText = '<p><a href="https://youtu.be/Abc_123-Xyz">Submission video</a></p>'
+const ctText = '<p>Our scanner setup.<sup class="citation" data-reference="ct-poster"><a href="#ref-ct-1">[1]</a></sup></p>'
+  + '<p><a href="https://youtu.be/Abc_123-Xyz">Submission video</a></p>'
   + '<p><a href="' + ownPublicImage + '">Knight shadow</a></p>'
   + '<p><a href="' + ct.public_pdf + '">Download the original poster</a></p>';
-const ctReferences = '<div class="references"><p><a href="' + ct.public_pdf + '#page=1">Poster reference</a></p></div>';
-const ctStaticPane = '<div id="ct-original-pdf" class="evidence-pdf" data-media-key="pdf:' + ct.pdf + '" data-static-media>'
+const ctReferences = '<div class="references"><ol><li id="ref-ct-1"><a href="' + ct.public_pdf + '#page=1">Poster reference</a></li></ol></div>';
+const ctStaticPane = '<div data-ct-original-pdf class="evidence-pdf" data-media-key="pdf:' + ct.pdf + '" data-static-media>'
   + ct.previews.map((src, i) => '<figure><a href="' + ct.public_pdf + '"><img src="' + src + '" alt="Poster page ' + (i + 1) + '"></a><figcaption>Poster page ' + (i + 1) + '</figcaption></figure>').join('') + '</div>';
 function html(mode) {
   const writer = ['/writer', '/private-writer', '/ct-writer'].includes(mode), plain = mode === '/plain';
@@ -142,6 +143,22 @@ const server = http.createServer((req, res) => {
       [1, 10, 16].map(number => 'Private example paper · ' + number + ' / 22'));
     assert.deepEqual(await page.locator('.evidence-pdf a').evaluateAll(links => links.map(link => link.href)),
       Array(3).fill(origin + '/assets/evidence/drafts/example/paper.pdf'), 'all previews open the full private PDF');
+    const essayIDs = [1, 10, 16].map(number => 'media-private-example-page-' + number);
+    assert.deepEqual(await page.locator('.evidence-pdf > figure').evaluateAll(figures => figures.map(figure => figure.id)), essayIDs);
+    const jumpText = '<p>Read <span class="text-citation" data-reference="essay-experiment"><a href="#' + essayIDs[0] + '">the experiment</a></span>, '
+      + '<a href="#' + essayIDs[2] + '">the Gaussian result</a>, and <a href="#' + essayIDs[1] + '">the coupling bench</a>.</p>';
+    await page.evaluate(text => {
+      window.originalEssayFigure = document.querySelector('.evidence-pdf > figure');
+      document.querySelector('#body').innerHTML = text;
+    }, jumpText);
+    await page.waitForFunction(() => document.querySelectorAll('.post-media > [data-media-key]').length === 1);
+    assert.equal(await page.locator('#body').innerHTML(), jumpText, 'same-page media links remain unchanged in the draft');
+    assert.equal(await page.evaluate(() => originalEssayFigure === document.querySelector('.evidence-pdf > figure')), true, 'fragment-only mentions reuse the existing preview figures');
+    assert.equal(await page.evaluate(({manifest, origin}) => {
+      const body = document.querySelector('#body'), items = BlogEvidenceMedia.mediaIn(body, BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
+      return items.length === 1 && items[0].anchor === body.querySelector('.text-citation a');
+    }, {manifest, origin}), true, 'named same-page media citations resolve directly and retain the first mention');
+    assert.deepEqual(await page.locator('.evidence-pdf > figure').evaluateAll(figures => figures.map(figure => figure.id)), essayIDs, 'page IDs remain stable across rerenders');
 
     await page.goto(origin + '/archive');
     await page.waitForSelector('.evidence-pdf img');
@@ -175,21 +192,21 @@ const server = http.createServer((req, res) => {
     const pdfKey = 'pdf:/assets/evidence/example/poster.pdf';
     const mediaOrder = () => page.locator('.post-media > [data-media-key]').evaluateAll(blocks => blocks.map(block => block.dataset.mediaKey));
     assert.deepEqual(await mediaOrder(), [linkedImageKey, pdfKey, 'inline:fallback'], 'linked static PDF follows the photo in body order');
-    assert.equal(await page.locator('#original-pdf-block').count(), 1, 'existing server-rendered PDF is reused');
-    assert.equal(await page.locator('#original-pdf-block.evidence-pdf-carousel').count(), 1, 'public static PDF gains the same carousel');
+    assert.equal(await page.locator('[data-original-pdf]').count(), 1, 'existing server-rendered PDF is reused');
+    assert.equal(await page.locator('[data-original-pdf].evidence-pdf-carousel').count(), 1, 'public static PDF gains the same carousel');
     assert.equal(await carousel.locator('figure:visible').count(), 1);
     await carousel.getByRole('button', {name: 'Next page'}).click();
-    assert.equal(await carousel.locator('figure:visible a').getAttribute('href'), pdf, 'poster page still opens the original PDF');
+    assert.equal(await carousel.locator('figure:visible .evidence-pdf-frame > a').getAttribute('href'), pdf, 'poster page still opens the original PDF');
     assert.equal(await page.locator('img[alt="Unreferenced fallback"]').count(), 1);
     assert.equal(await page.locator('.post-body').innerHTML(), staticText);
     await page.evaluate(({manifest, origin}) => {
       const body = document.querySelector('.post-body');
-      window.originalStaticPdf = document.getElementById('original-pdf-block');
+      window.originalStaticPdf = document.querySelector('[data-original-pdf]');
       body.prepend(body.lastElementChild);
       BlogEvidenceMedia.enhanceArticle(body, BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
     }, {manifest, origin});
     assert.deepEqual(await mediaOrder(), [pdfKey, linkedImageKey, 'inline:fallback'], 'reordered links move reused PDF to the corresponding position');
-    assert.equal(await page.evaluate(() => originalStaticPdf === document.getElementById('original-pdf-block')), true);
+    assert.equal(await page.evaluate(() => originalStaticPdf === document.querySelector('[data-original-pdf]')), true);
     assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3', 'reordering preserves the selected page');
     await page.evaluate(({manifest, origin}) => {
       const body = document.querySelector('.post-body');body.firstElementChild.remove();
@@ -211,8 +228,8 @@ const server = http.createServer((req, res) => {
     for (const mode of ['/ct-writer', '/ct-archive']) {
       await page.goto(origin + mode);
       await page.waitForSelector('.evidence-pdf-carousel');
-      const expected = ['pdf:' + ct.pdf, linkedImageKey, 'video:Abc_123-Xyz'];
-      assert.deepEqual(await mediaOrder(), expected, mode + ' opts into poster, picture, video order');
+      const expected = ['pdf:' + ct.pdf, 'video:Abc_123-Xyz', linkedImageKey];
+      assert.deepEqual(await mediaOrder(), expected, mode + ' follows first mentions: numbered poster citation, video, picture');
       assert.equal(await page.locator('.post-body').innerHTML(), ctText + ctReferences, 'prose, links and citation markup stay unchanged');
       await carousel.getByRole('button', {name: 'Next page'}).click();
       await page.evaluate(({manifest, origin}) => {
@@ -224,16 +241,21 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.evaluate(() => ctFrame === document.querySelector('iframe') && ctPoster === document.querySelector('.evidence-pdf')), true, 'ordered renders preserve the live player and poster nodes');
       assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3');
       await page.evaluate(({manifest, origin}) => {
-        const body = document.querySelector('.post-body');body.querySelectorAll(':scope > p')[2].remove();
+        const body = document.querySelector('.post-body');body.querySelectorAll(':scope > p')[3].remove();
         BlogEvidenceMedia.renderPane(body, document.querySelector('.post-media'), BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
       }, {manifest, origin});
-      assert.equal(await page.locator('.references').innerHTML(), '<p><a href="' + ct.public_pdf + '#page=1">Poster reference</a></p>');
+      assert.deepEqual(await mediaOrder(), expected, 'numbered citation still anchors the poster after its redundant download link is removed');
+      assert.equal(await page.locator('.references').evaluate(element => element.outerHTML), ctReferences);
+      await page.evaluate(({manifest, origin}) => {
+        const body = document.querySelector('.post-body');body.querySelector(':scope > p').remove();
+        BlogEvidenceMedia.renderPane(body, document.querySelector('.post-media'), BlogEvidenceMedia.pdfManifest(manifest, origin + '/'));
+      }, {manifest, origin});
       if (mode === '/ct-archive') {
-        assert.deepEqual(await mediaOrder(), expected, 'public static poster still matches its policy when only a reference link remains');
-        assert.equal(await page.locator('#ct-original-pdf').count(), 1);
+        assert.deepEqual(await mediaOrder(), ['video:Abc_123-Xyz', linkedImageKey, 'pdf:' + ct.pdf], 'unmentioned public static poster remains as a final fallback');
+        assert.equal(await page.locator('[data-ct-original-pdf]').count(), 1);
         assert.equal(await carousel.getByRole('status').textContent(), 'Page 2 of 3');
       } else {
-        assert.deepEqual(await mediaOrder(), ['video:Abc_123-Xyz', linkedImageKey], 'without a displayed configured PDF, source order and reference exclusion remain unchanged');
+        assert.deepEqual(await mediaOrder(), ['video:Abc_123-Xyz', linkedImageKey], 'uncited reference-list PDFs do not create previews');
       }
     }
     await page.goto(origin + '/plain');

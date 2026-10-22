@@ -63,7 +63,6 @@ test('known PDF previews resolve on the current site and keep a stable public do
   assert.equal(entries[0].downloadURL.href, data['/evidence/example/'].public_pdf);
   assert.deepEqual(entries[0].pages, [1]);
   assert.equal(entries[0].totalPages, 1);
-  assert.deepEqual(entries[0].mediaOrder, [], 'default media stays in source order');
   assert.equal(knownPdf(data['/evidence/example/'].public_pdf + '#page=1', entries, 'https://private.example/'), entries[0]);
   assert.equal(knownPdf('/assets/evidence/example/poster.pdf', entries, 'https://private.example/'), entries[0]);
   assert.equal(knownPdf('https://unrelated.example/blog/assets/evidence/example/poster.pdf', entries, 'https://private.example/'), null);
@@ -73,14 +72,22 @@ test('known PDF previews resolve on the current site and keep a stable public do
   }
 });
 
-test('only explicit valid media order settings override source order', () => {
+test('legacy type-order metadata no longer changes a known PDF', () => {
   const data = require('../_data/evidence.json'), entry = data['/evidence/ct-scanner/'];
-  assert.deepEqual(pdfManifest(data, 'https://private.example/')[0].mediaOrder, ['pdf', 'image', 'video']);
-  for (const media_order of [null, 'pdf,image,video', [], ['pdf', 'pdf'], ['pdf', 'unknown']]) {
-    const parsed = pdfManifest({'/example/': {...entry, media_order}}, 'https://private.example/');
-    assert.equal(parsed.length, 1, 'invalid ordering never removes PDF previews');
-    assert.deepEqual(parsed[0].mediaOrder, []);
-  }
+  assert.deepEqual(pdfManifest({'/evidence/ct-scanner/': {...entry, media_order: ['pdf', 'image', 'video']}}, 'https://private.example/'),
+    pdfManifest(data, 'https://private.example/'));
+});
+
+test('PDF page fragments use stable, distinct permalink IDs and only known preview pages', () => {
+  const entry = {pdf: '/assets/evidence/drafts/ib-physics/paper.pdf', download_url: '/assets/evidence/drafts/ib-physics/paper.pdf',
+    title: 'Physics essay', previews: [1, 10, 16].map(page => '/assets/evidence/drafts/ib-physics/page-' + page + '.webp'), preview_pages: [1, 10, 16], total_pages: 22};
+  const entries = pdfManifest({'/evidence/ib-physics-extended-essay/': entry}, 'https://private.example/');
+  assert.equal(entries[0].id, 'media-evidence--ib-physics-extended-essay');
+  for (const page of [1, 10, 16]) assert.equal(knownPdf('#media-evidence--ib-physics-extended-essay-page-' + page, entries, 'https://private.example/write/'), entries[0]);
+  for (const fragment of ['#media-evidence--ib-physics-extended-essay-page-2', '#media-evidence--ib-physics-extended-essay-page-01', '#ref-unknown', '#bad%']) assert.equal(knownPdf(fragment, entries, 'https://private.example/write/'), null);
+  const routes = ['/', '/root/', '/a/b/', '/a--b/', '/a-/b/', '/a/-b/', '/a_b/', '/a_5f_b/'];
+  const ids = routes.map(route => pdfManifest({[route]: entry}, 'https://private.example/')[0].id);
+  assert.equal(new Set(ids).size, routes.length, 'route separators and literal escape markers cannot collide');
 });
 
 test('private PDF links keep their authenticated host and representative page numbers', () => {

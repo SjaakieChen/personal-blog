@@ -62,7 +62,8 @@
   function pdfManifest(data, assetBase) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
     const path = /^\/assets\/evidence\/[A-Za-z0-9_/-]+\.(pdf|webp|png|jpe?g)$/;
-    return Object.values(data).flatMap(entry => {
+    return Object.entries(data).flatMap(([permalink, entry]) => {
+      if (!/^\/(?:[^/?#]+(?:\/[^/?#]+)*\/?)?$/.test(permalink)) return [];
       if (!entry || typeof entry.title !== 'string' || !path.test(entry.pdf || '')
           || !entry.pdf.endsWith('.pdf') || !Array.isArray(entry.previews) || !entry.previews.length
           || !entry.previews.every(preview => typeof preview === 'string' && path.test(preview) && !preview.endsWith('.pdf'))) return [];
@@ -70,18 +71,21 @@
       const totalPages = entry.total_pages ?? (entry.preview_pages ? null : entry.previews.length);
       if (!Array.isArray(pages) || pages.length !== entry.previews.length
           || !pages.every(page => Number.isSafeInteger(page) && page > 0)
+          || new Set(pages).size !== pages.length
           || (totalPages !== null && (!Number.isSafeInteger(totalPages) || totalPages < Math.max(...pages)))) return [];
-      const order = entry.media_order;
-      const mediaOrder = Array.isArray(order) && order.length > 0
-        && order.every(type => ['pdf', 'image', 'video', 'demo'].includes(type))
-        && new Set(order).size === order.length ? order.slice() : [];
+      // Double hyphens separate route segments. Escape ambiguous hyphens and
+      // punctuation so distinct permalinks retain distinct, stable media IDs.
+      const route = permalink.slice(1).replace(/\/$/, '').split('/').map(segment =>
+        segment.replace(/^-|-$|--|[^A-Za-z0-9-]/g, value =>
+          Array.from(value, character => '_' + character.codePointAt(0).toString(16) + '_').join(''))).join('--');
+      const id = 'media' + (route ? '-' + route : '');
       try {
         const download = entry.download_url || entry.public_pdf;
         if (typeof download !== 'string' || !download.trim()) return [];
         const downloadURL = new URL(download, assetBase), baseURL = new URL(assetBase);
         const sameOriginHTTP = downloadURL.protocol === 'http:' && downloadURL.origin === baseURL.origin;
         if ((downloadURL.protocol !== 'https:' && !sameOriginHTTP) || downloadURL.username || downloadURL.password) return [];
-        return [{type: 'pdf', key: 'pdf:' + entry.pdf, title: entry.title, downloadURL, pages, totalPages, mediaOrder,
+        return [{type: 'pdf', key: 'pdf:' + entry.pdf, id, title: entry.title, downloadURL, pages, totalPages,
           localURL: new URL(entry.pdf.slice(1), assetBase),
           previews: entry.previews.map(preview => new URL(preview.slice(1), assetBase).href)}];
       } catch { return []; }
@@ -89,6 +93,12 @@
   }
 
   function knownPdf(value, entries, base) {
+    if (typeof value === 'string' && value.startsWith('#')) {
+      let target;
+      try { target = decodeURIComponent(value.slice(1)); } catch { return null; }
+      return entries.find(entry => target === entry.id + '-document'
+        || entry.pages.some(page => target === entry.id + '-page-' + page)) || null;
+    }
     let url;
     try { url = new URL(value, base); } catch { return null; }
     if (url.username || url.password) return null;
@@ -98,14 +108,28 @@
 
   function mediaIn(body, entries = []) {
     const media = new Map();
+    const scope = body.closest('.post-copy') || body.closest('.post') || body;
     for (const link of body.querySelectorAll('a[href]')) {
       if (link.closest('.references, [data-references], .explanation-notes, [data-notes]')) continue;
-      const value = link.getAttribute('href'), id = youtubeId(value);
+      let source = link;
+      const href = link.getAttribute('href');
+      if (href.startsWith('#') && !knownPdf(href, entries, body.ownerDocument.baseURI)
+          && link.closest('.citation, [data-reference]')) {
+        // Resolve a numbered citation only within this post's own References.
+        // The citation stays the anchor; the source supplies its URL and title.
+        let target;
+        try { target = decodeURIComponent(href.slice(1)); } catch { continue; }
+        const reference = [...scope.querySelectorAll('.references li[id], [data-references] li[id]')]
+          .find(item => item.id === target);
+        source = reference?.querySelector(':scope > a[href]');
+        if (!source) continue;
+      }
+      const value = source.getAttribute('href'), id = youtubeId(value);
       const image = imageURL(value, body.ownerDocument.baseURI, siteBase);
       const demo = demoURL(value, body.ownerDocument.baseURI, siteBase);
-      const item = id ? {type: 'video', key: 'video:' + id, id, title: link.textContent.trim() || 'YouTube video'}
-        : image ? {type: 'image', key: 'image:' + image, url: image, title: link.textContent.trim() || 'Project screenshot'}
-        : demo ? {type: 'demo', key: 'demo:' + demo, url: demo, title: link.textContent.trim() || 'Interactive emulator'}
+      const item = id ? {type: 'video', key: 'video:' + id, id, title: source.textContent.trim() || 'YouTube video'}
+        : image ? {type: 'image', key: 'image:' + image, url: image, title: source.textContent.trim() || 'Project screenshot'}
+        : demo ? {type: 'demo', key: 'demo:' + demo, url: demo, title: source.textContent.trim() || 'Interactive emulator'}
         : knownPdf(value, entries, body.ownerDocument.baseURI);
       if (item && !media.has(item.key)) media.set(item.key, {...item, anchor: link});
     }
@@ -235,16 +259,69 @@
     slides.forEach((slide, index) => {
       slide.setAttribute('role', 'group');slide.setAttribute('aria-roledescription', 'slide');
       slide.setAttribute('aria-label', 'Page ' + (index + 1) + ' of ' + slides.length);
+      const image = slide.querySelector('img'), link = image.closest('a');
+      const frame = doc.createElement('div'), feedback = doc.createElement('div');
+      const message = doc.createElement('p'), retry = doc.createElement('button'), open = doc.createElement('a');
+      frame.className = 'evidence-pdf-frame';feedback.className = 'evidence-pdf-feedback';
+      message.setAttribute('aria-live', 'polite');
+      retry.type = 'button';retry.textContent = 'Retry page';
+      retry.setAttribute('aria-label', 'Retry page ' + (index + 1) + ' preview');
+      open.href = item.downloadURL.href;open.textContent = 'Open PDF';
+      link.before(frame);frame.append(link);feedback.append(message, retry, open);frame.append(feedback);
+      let generation = 0;
+      const failed = token => {
+        if (token !== generation) return;
+        frame.dataset.state = 'error';frame.setAttribute('aria-busy', 'false');
+        message.textContent = 'Page preview could not load. Retry or open the PDF.';
+        retry.disabled = false;retry.hidden = false;feedback.hidden = false;
+      };
+      const loaded = async token => {
+        try {
+          if (typeof image.decode === 'function') await image.decode();
+          if (!image.naturalWidth) throw new Error('Empty preview');
+          if (token !== generation) return;
+          frame.dataset.state = 'ready';frame.setAttribute('aria-busy', 'false');
+          if (doc.activeElement === retry) link.focus({preventScroll: true});
+          feedback.hidden = true;
+        } catch { failed(token); }
+      };
+      const load = again => {
+        generation += 1;frame.dataset.state = 'loading';frame.setAttribute('aria-busy', 'true');
+        message.textContent = 'Loading page ' + (index + 1) + ' preview…';
+        retry.hidden = !again;retry.disabled = again;feedback.hidden = false;
+        if (again) {
+          const url = new URL(image.src);
+          url.searchParams.set('preview_retry', Date.now().toString());image.src = url.href;
+        }
+        // These few poster pages are small. Start them together, including
+        // hidden slides, so a cold-cache Next never reveals a partial image.
+        image.loading = 'eager';
+        if (image.complete) image.naturalWidth ? loaded(generation) : failed(generation);
+      };
+      image.addEventListener('load', () => loaded(generation));
+      image.addEventListener('error', () => failed(generation));
+      retry.addEventListener('click', () => load(true));load(false);
     });
     let current = 0;
     function show(index) {
       current = index;
-      slides.forEach((slide, number) => { slide.hidden = number !== current; });
+      slides.forEach((slide, number) => {
+        const active = number === current;
+        // Invisible slides still size the shared grid row, including captions.
+        // The frame and controls therefore stay put even for different pages.
+        slide.hidden = false;slide.classList.toggle('is-current', active);
+        slide.inert = !active;slide.setAttribute('aria-hidden', String(!active));
+      });
       previous.disabled = current === 0;next.disabled = current === slides.length - 1;
       status.textContent = 'Page ' + (current + 1) + ' of ' + slides.length;
     }
     previous.addEventListener('click', () => show(Math.max(0, current - 1)));
     next.addEventListener('click', () => show(Math.min(slides.length - 1, current + 1)));
+    block.addEventListener('blog-media-reveal', event => {
+      const target = event.detail?.target || event.target;
+      const index = slides.findIndex(slide => slide === target || slide.contains(target));
+      if (index >= 0) show(index);
+    });
     controls.append(previous, status, next);block.append(controls);show(0);
   }
 
@@ -324,21 +401,27 @@
     // Reuse linked server-rendered media in source order, then retain any
     // unreferenced PDF or inline-media fallback after the linked items.
     blocks.push(...available.filter(block => block.hasAttribute('data-static-media') && !blocks.includes(block)));
-    // A configured evidence document can opt into a pane order without moving
-    // the author's paragraphs or replacing live players/carousel state.
-    const order = entries.find(entry => entry.mediaOrder?.length
-      && blocks.some(block => block.dataset.mediaKey === entry.key))?.mediaOrder;
-    if (order) {
-      const rank = block => {
-        const type = block.classList.contains('evidence-image') ? 'image' : block.dataset.mediaKey.split(':', 1)[0];
-        const position = order.indexOf(type);
-        return position < 0 ? order.length : position;
-      };
-      blocks.sort((left, right) => rank(left) - rank(right));
-    }
+    // Inline media retain a marker where they appeared in the writing. Include
+    // those markers in first-mention order, leaving unmentioned fallbacks last.
+    const mention = block => {
+      const anchor = mediaAnchors.get(block);
+      return anchor && body.contains(anchor) ? anchor : null;
+    };
+    blocks.sort((left, right) => {
+      const first = mention(left), second = mention(right);
+      if (!first || !second) return Number(!!second) - Number(!!first);
+      if (first === second) return 0;
+      return first.compareDocumentPosition(second) & root.Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
     for (const block of blocks) {
       const item = entries.find(entry => entry.key === block.dataset.mediaKey);
-      if (item) enhancePdf(block, item);
+      if (item) {
+        block.id = item.id + '-document';
+        [...block.querySelectorAll(':scope > figure')].forEach((figure, index) => {
+          figure.id = item.id + '-page-' + item.pages[index];
+        });
+        enhancePdf(block, item);
+      }
     }
     // Preserve live frames across editor redraws and text edits. Neither the
     // editable HTML nor the serialized document gains media nodes.
@@ -346,7 +429,12 @@
       demoCleanup.get(block)?.();demoCleanup.delete(block);block.remove();
     });
     blocks.forEach((block, index) => {
-      if (pane.children[index] !== block) pane.insertBefore(block, pane.children[index] || null);
+      if (pane.children[index] === block) return;
+      const next = pane.children[index] || null;
+      // Moving a connected iframe with insertBefore reloads its document.
+      // Atomic moves retain playback as first-mention order changes.
+      if (block.parentElement === pane && typeof pane.moveBefore === 'function') pane.moveBefore(block, next);
+      else pane.insertBefore(block, next);
     });
     pane.hidden = !blocks.length;
     watchPaneLayout(body, pane);
@@ -385,7 +473,10 @@
     render();
     const observer = new root.MutationObserver(render);
     observer.observe(body, {childList: true, subtree: true, characterData: true,
-      attributes: true, attributeFilter: ['href']});
+      attributes: true, attributeFilter: ['href', 'id']});
+    const references = body.closest('.post-copy')?.querySelector('#reference-preview');
+    if (references && !body.contains(references)) observer.observe(references,
+      {childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['href', 'id']});
     return {observer, render};
   }
 

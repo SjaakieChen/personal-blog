@@ -7,9 +7,13 @@
   }
   function safeURL(value) {
     if(typeof value!=='string' || /[\s\\<>]/.test(value)) return '';
+    if(value.startsWith('#')) {
+      try {return value.length>1 && !/[\s\\<>\u0000-\u001f\u007f]/.test(decodeURIComponent(value.slice(1)))?value:'';} catch {return '';}
+    }
     if(/^\/(?!\/)/.test(value)) return value;
     try {return ['https:','http:'].includes(new URL(value).protocol)?value:'';} catch {return '';}
   }
+  const linkTarget = url => url.startsWith('#')?'':' target="_blank" rel="noopener noreferrer"';
   function parseCitation(data) {
     if(!data || data.type!=='blog-citation' || data.version!==1 || !data.source || typeof data.source!=='object' || Array.isArray(data.source)) throw new Error('Use a version 1 blog-citation JSON file.');
     const text=(value,name)=>{
@@ -30,14 +34,15 @@
     if(i<0) return '<sup class="citation missing-reference">[?]</sup>';
     if(label) {
       const small=labelStyle==='small', tag=small?'sup':'span';
-      return '<'+tag+' class="text-citation'+(small?' citation':'')+'" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'" data-label="'+escapeHTML(label)+'" data-label-style="'+(small?'small':'normal')+'"><a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(references[i].url))+'" title="'+escapeHTML(references[i].title+(locator?' — '+locator:''))+'">'+escapeHTML(label)+'</a></'+tag+'>';
+      const url=safeURL(references[i].url);
+      return '<'+tag+' class="text-citation'+(small?' citation':'')+'" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'" data-label="'+escapeHTML(label)+'" data-label-style="'+(small?'small':'normal')+'"><a'+linkTarget(url)+' href="'+escapeHTML(url)+'" title="'+escapeHTML(references[i].title+(locator?' — '+locator:''))+'">'+escapeHTML(label)+'</a></'+tag+'>';
     }
     return '<sup class="citation" contenteditable="false" data-reference="'+escapeHTML(id)+'" data-locator="'+escapeHTML(locator)+'"><a href="#'+escapeHTML(key)+'-'+(i+1)+'" aria-label="Reference '+(i+1)+(locator?', '+escapeHTML(locator):'')+'" title="'+escapeHTML(locator)+'">['+(i+1)+']</a></sup>';
   }
   function renderReferences(references=[], key='preview') {
     if(!references.length)return '';
     return '<section class="references" data-references="true" aria-label="References"><h2>References</h2><ol>'+references.map((r,i)=>{
-      const link=(url,label)=>safeURL(url)?'<a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(safeURL(url))+'">'+escapeHTML(label)+'</a>':'';
+      const link=(url,label)=>safeURL(url)?'<a'+linkTarget(url)+' href="'+escapeHTML(safeURL(url))+'">'+escapeHTML(label)+'</a>':'';
       return '<li id="'+escapeHTML(key)+'-'+(i+1)+'">'+(link(r.url,r.title)||escapeHTML(r.title || 'Untitled source'))+(r.author?' — '+escapeHTML(r.author):'')+(r.details?'. '+escapeHTML(r.details):'')+(r.savedUrl?' <span class="reference-copy">'+link(r.savedUrl,'Saved copy')+'</span>':'')+(r.note?'<p>'+escapeHTML(r.note)+'</p>':'')+'</li>';
     }).join('')+'</ol></section>';
   }
@@ -72,7 +77,7 @@
       if(run.underline) text='<u>'+text+'</u>';
       if(run.italic) text='<em>'+text+'</em>';
       if(run.bold) text='<strong>'+text+'</strong>';
-      if(safeURL(run.link)) text='<a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(run.link)+'">'+text+'</a>';
+      if(safeURL(run.link)) text='<a'+linkTarget(run.link)+' href="'+escapeHTML(run.link)+'">'+text+'</a>';
       if(run.quoted) text='<q>'+text+'</q>';
       if(run.reference) text+=citation(run.reference,references,key,run.locator || '',run.label || '',run.labelStyle || 'normal');
       if(run.note) text+=noteMarker(run.note,used,key);
