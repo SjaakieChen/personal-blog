@@ -28,7 +28,12 @@
       const assets = new URL('assets/evidence/', assetBase || new URL('/', current));
       const filename = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.(?:webp|png|jpe?g)$/;
       const publicAssets = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/';
-      if (value.startsWith(publicAssets)) {
+      const fragmentPrefix = '#media-image/assets/evidence/';
+      if (value.startsWith(fragmentPrefix)) {
+        const relative = value.slice(fragmentPrefix.length);
+        if (!filename.test(relative)) return null;
+        url = new URL(relative, assets);
+      } else if (value.startsWith(publicAssets)) {
         const relative = value.slice(publicAssets.length).split(/[?#]/, 1)[0];
         if (!filename.test(relative)) return null;
         // The private desk serves this blog's deployed assets locally. Keep the
@@ -43,6 +48,13 @@
       url.search = '';url.hash = '';
       return url.href;
     } catch { return null; }
+  }
+
+  function imageFragment(value, base, assetBase) {
+    const image = imageURL(value, base, assetBase);
+    if (!image) return null;
+    const assets = new URL('assets/evidence/', assetBase || new URL('/', base));
+    return '#media-image/assets/evidence/' + new URL(image).pathname.slice(assets.pathname.length);
   }
 
   function youtubeId(value) {
@@ -114,6 +126,7 @@
       let source = link;
       const href = link.getAttribute('href');
       if (href.startsWith('#') && !knownPdf(href, entries, body.ownerDocument.baseURI)
+          && !imageURL(href, body.ownerDocument.baseURI, siteBase)
           && link.closest('.citation, [data-reference]')) {
         // Resolve a numbered citation only within this post's own References.
         // The citation stays the anchor; the source supplies its URL and title.
@@ -398,6 +411,7 @@
         block.querySelector('iframe').title = item.title;
         block.querySelector('figcaption').textContent = item.title;
       } else if (item.type === 'image') {
+        block.id = imageFragment(item.url, body.ownerDocument.baseURI, siteBase).slice(1);
         block.querySelector('img').alt = item.title;
         block.querySelector('a').setAttribute('aria-label', 'Open full-size image: ' + item.title);
         block.querySelector('figcaption').textContent = item.title;
@@ -490,7 +504,7 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;

@@ -4,6 +4,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),fragment='media-evidence--ib-physics-extended-essay-page-16';
 const imagePath='/assets/evidence/test/lenses.png',publicImage='https://sjaakiechen.github.io/personal-blog'+imagePath;
+const imageFragment='#media-image'+imagePath;
 let cloud,origin;
 const html=(images=false)=>fs.readFileSync(path.join(root,'write.html'),'utf8').replace(/^---[\s\S]*?---\s*/,'')
   .replace(/\{\{\s*'([^']*)'\s*\|\s*relative_url\s*\}\}/g,'$1').replace(/\?v=\{\{[^}]*\}\}/g,'')
@@ -29,7 +30,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/image-feed'){
     res.setHeader('Content-Type','text/html');res.end('<!doctype html><link rel="stylesheet" href="/styles.css"><script src="/assets/links.js" defer></script><script src="/assets/evidence-media.js" defer></script>'
       +'<div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'+[1,2].map(n=>
-        '<article class="post" id="image-article-'+n+'"><div class="post-copy"><h1>Image example '+n+'</h1><div class="post-body"><p><a href="'+publicImage+'">Image '+n+'</a></p></div></div><aside class="post-media" hidden></aside></article>').join('')+'</div></main></div>');return;
+        '<article class="post" id="image-article-'+n+'"><div class="post-copy"><h1>Image example '+n+'</h1><div class="post-body"><p><a href="'+(n===2?imageFragment:publicImage)+'">Image '+n+'</a></p></div></div><aside class="post-media" hidden></aside></article>').join('')+'</div></main></div>');return;
   }
   const file=path.resolve(root,'.'+url.pathname);
   if(req.method==='GET' && file.startsWith(root+path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()){
@@ -125,6 +126,23 @@ const server=http.createServer(async(req,res)=>{
     const fullImage=await fullImagePromise;await fullImage.waitForLoadState('domcontentloaded');
     assert.equal(fullImage.url(),origin+imagePath,'clicking the figure still opens the full-size image');
     assert.equal(await fullImage.evaluate(()=>window.opener),null);await fullImage.close();
+    const fragmentSave=imagePage.waitForResponse(response=>new URL(response.url()).pathname==='/api/drafts' && response.request().method()==='POST');
+    await imagePage.locator('#body').evaluate((body,fragment)=>{
+      body.querySelector('a').setAttribute('href',fragment);body.dispatchEvent(new Event('input',{bubbles:true}));
+    },imageFragment);
+    await fragmentSave;
+    assert.equal(cloud.drafts[0].doc[0].runs[1].link,imageFragment,'writer saves the actual same-page image fragment');
+    await imagePage.reload();await imagePage.locator('.post-media .evidence-image').waitFor();
+    assert.equal(await imagePage.locator('.evidence-image').getAttribute('id'),imageFragment.slice(1),'reload discovers the image from the fragment alone');
+    assert.equal(await imagePage.getByRole('link',{name:'two lenses',exact:true}).getAttribute('href'),imageFragment);
+    assert.equal(await imagePage.getByRole('link',{name:'two lenses',exact:true}).getAttribute('target'),null);
+    await imagePage.getByRole('link',{name:'two lenses',exact:true}).click();
+    assert.equal(new URL(imagePage.url()).hash,imageFragment,'normal click follows the real same-page fragment');
+    assert.equal(imagePage.context().pages().length,1);
+    const fragmentImagePromise=imagePage.waitForEvent('popup');
+    await imagePage.getByRole('link',{name:'Open full-size image: two lenses',exact:true}).click();
+    const fragmentImage=await fragmentImagePromise;await fragmentImage.waitForLoadState('domcontentloaded');
+    assert.equal(fragmentImage.url(),origin+imagePath,'fragment-generated figure still opens the full-size image');await fragmentImage.close();
     await imagePage.goto(origin+'/image-feed');await imagePage.locator('#image-article-2 .evidence-image').waitFor();
     await imagePage.evaluate(()=>document.querySelectorAll('.evidence-image').forEach(target=>{
       const scroll=target.scrollIntoView.bind(target);target.scrollIntoView=options=>{window.imageArticle=target.closest('.post').id;scroll(options);};
@@ -138,6 +156,11 @@ const server=http.createServer(async(req,res)=>{
       const article=document.querySelector('#image-article-2');article.querySelector('.evidence-image').remove();
       return BlogEvidenceMedia.imageTarget(article.querySelector('.post-body a'));
     }),null,'a missing local figure never resolves to another article’s copy');
+    await imagePage.route('**/assets/links.js',route=>route.fulfill({contentType:'application/javascript',body:'/* Simulate an unavailable or older click handler. */'}));
+    await imagePage.goto(origin+'/image-feed');await imagePage.locator('#image-article-2 .evidence-image').waitFor();
+    await imagePage.getByRole('link',{name:'Image 2',exact:true}).click();
+    assert.equal(new URL(imagePage.url()).hash,imageFragment,'native fragment navigation works without the click-interception script');
+    assert.equal(imagePage.context().pages().length,1,'native fragment never opens the raw image in another window');
     await imagePage.close();
     assert.deepEqual(errors,[]);
     console.log('Link browser checks passed: real editable writer, fragments and image pointers, unchanged documents, full-size image/PDF popups, modifier semantics and article isolation.');

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {youtubeId, imageURL, demoURL, pdfManifest, knownPdf} = require('../assets/evidence-media');
+const {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf} = require('../assets/evidence-media');
 
 test('interactive demos accept only same-site evidence entry documents', () => {
   const base = 'https://private.example:8446/write/', entry = '/assets/evidence/drafts/demos/imec-alignment/index.html';
@@ -31,6 +31,21 @@ test('own public evidence images map to the current asset base for private previ
   assert.equal(imageURL(value, 'https://sjaakiechen.github.io/personal-blog/evidence/ct-scanner/', 'https://sjaakiechen.github.io/personal-blog/'), value);
   for (const invalid of [value.replace('https:', 'http:'), value.replace('sjaakiechen.github.io', 'sjaakiechen.github.io.example.org'), value.replace('sjaakiechen.github.io', 'other.github.io'), value.replace('https://', 'https://user@'), value.replace('.io/', '.io:443/'), value.replace('.io/', '.io:8446/'), prefix + 'one/../knight.png', prefix + 'one/%2e%2e/knight.png', prefix + '../knight.png', prefix + 'knight.svg', prefix + 'knight%2epng']) {
     assert.equal(imageURL(invalid, 'https://private.example:8446/write/', 'https://private.example:8446/'), null, invalid);
+  }
+});
+
+test('image fragments identify only safe evidence assets across private and public bases', () => {
+  const fragment = '#media-image/assets/evidence/ct-scanner/knight-shadow.png';
+  for (const [base, assets, expected] of [
+    ['https://private.example:8446/write/', 'https://private.example:8446/', 'https://private.example:8446/assets/evidence/ct-scanner/knight-shadow.png'],
+    ['https://sjaakiechen.github.io/personal-blog/evidence/ct-scanner/', 'https://sjaakiechen.github.io/personal-blog/', 'https://sjaakiechen.github.io/personal-blog/assets/evidence/ct-scanner/knight-shadow.png'],
+    ['http://127.0.0.1:8787/write/', 'http://127.0.0.1:8787/', 'http://127.0.0.1:8787/assets/evidence/ct-scanner/knight-shadow.png']
+  ]) {
+    assert.equal(imageURL(fragment, base, assets), expected);
+    assert.equal(imageFragment(expected, base, assets), fragment);
+  }
+  for (const invalid of ['#media-image/assets/evidence/../private.png', '#media-image/assets/evidence/%2e%2e/private.png', '#media-image/assets/evidence/image.svg', '#media-image/assets/evidence/image.png?x=1', '#media-image/assets/evidence/image.png#other', '#media-image/https://external.example/image.png']) {
+    assert.equal(imageURL(invalid, 'https://private.example/write/'), null, invalid);
   }
 });
 

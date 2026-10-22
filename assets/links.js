@@ -47,7 +47,7 @@
     update(link);
     if(event.defaultPrevented || event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)return;
     const image=window.BlogEvidenceMedia?.imageTarget?.(link);
-    if(image){event.preventDefault();revealMedia(image);return;}
+    if(image && !samePage(link)){event.preventDefault();revealMedia(image);return;}
     const destination=new URL(link.href,location.href);
     if(!samePage(link)){
       // A normal click inside contenteditable selects the link by default.

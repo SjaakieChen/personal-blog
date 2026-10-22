@@ -124,7 +124,7 @@ class PublishingTests(unittest.TestCase):
 
     def test_publish_rejects_private_attachment_links_before_any_github_request(self):
         prefix = publisher.PRIVATE_MEDIA_PREFIX
-        for link in [publisher.ORIGIN+prefix+'ib/paper.pdf', prefix+'ib/paper.pdf', prefix.replace('/', '%2F')+'ib/paper.pdf', prefix.replace('/', '&#47;')+'ib/paper.pdf', (publisher.ORIGIN+prefix+'ib/paper.pdf').replace('/', '\\/'), prefix+'demos/example/index.html', publisher.ORIGIN+prefix+'demos/example/index.html']:
+        for link in [publisher.ORIGIN+prefix+'ib/paper.pdf', prefix+'ib/paper.pdf', prefix.replace('/', '%2F')+'ib/paper.pdf', prefix.replace('/', '&#47;')+'ib/paper.pdf', (publisher.ORIGIN+prefix+'ib/paper.pdf').replace('/', '\\/'), prefix+'demos/example/index.html', publisher.ORIGIN+prefix+'demos/example/index.html', '#media-image'+prefix+'imec/lenses.png', '#media-image'+prefix.replace('/', '%2F')+'imec/lenses.png']:
             with self.subTest(link=link), patch.object(publisher, 'gh_api') as api:
                 with self.assertRaisesRegex(ValueError, 'Promote the attachment'):
                     publisher.publish({'path': 'pages/private.md', 'content': '---\ntitle: "Private"\n---\n<p><a href="'+link+'">Paper</a></p>'})
