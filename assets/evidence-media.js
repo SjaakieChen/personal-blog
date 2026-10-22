@@ -136,6 +136,16 @@
     return [...media.values()];
   }
 
+  function imageTarget(link) {
+    const body = link.closest('.post-body');
+    if (!body || link.closest('.references, [data-references], .explanation-notes, [data-notes]')) return null;
+    const url = imageURL(link.getAttribute('href'), link.ownerDocument.baseURI, siteBase);
+    const pane = body.closest('.post')?.querySelector(':scope > .post-media');
+    if (!url || !pane || pane.hidden) return null;
+    return [...pane.children].find(block => !block.hidden && block.classList.contains('evidence-image')
+      && block.dataset.mediaKey === 'image:' + url) || null;
+  }
+
   function createDemo(doc, block, item) {
     block.className = 'evidence-demo';block.dataset.state = 'idle';
     const view = doc.defaultView, stage = doc.createElement('div'), controls = doc.createElement('div');
@@ -480,7 +490,7 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, demoURL, pdfManifest, knownPdf, mediaIn, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;
