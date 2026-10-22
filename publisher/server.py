@@ -186,19 +186,37 @@ def writing_index():
         for path, sha, fields, html in entries:
             cache_key = (path, sha)
             if cache_key not in entry_cache:
-                history = []
-                page = 1
-                while True:
-                    query = urlencode({'path': path, 'sha': revision, 'per_page': 100, 'page': page})
-                    commits = gh_api(f'repos/{REPO}/commits?{query}')
-                    history.extend(commits)
-                    if len(commits) < 100:
-                        break
-                    page += 1
-                if not history:
-                    raise RuntimeError('Could not load publication dates from GitHub.')
-                newest = history[0]['commit']['committer']['date']
-                oldest = history[-1]['commit']['committer']['date']
+                previous_paths = fields.get('previous_paths', [])
+                if not isinstance(previous_paths, list) or any(not valid_path(old) or old == path for old in previous_paths):
+                    raise ValueError('Invalid previous publication paths.')
+                previous_paths = list(dict.fromkeys(previous_paths))
+                previous_sha = fields.get('previous_source_sha')
+                if previous_sha is not None and (not isinstance(previous_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', previous_sha)):
+                    raise ValueError('Invalid previous publication revision.')
+
+                def path_history(history_path, at_revision):
+                    commits = []
+                    page = 1
+                    while True:
+                        query = urlencode({'path': history_path, 'sha': at_revision, 'per_page': 100, 'page': page})
+                        batch = gh_api(f'repos/{REPO}/commits?{query}')
+                        commits.extend(batch)
+                        if len(batch) < 100:
+                            break
+                        page += 1
+                    if not commits:
+                        raise RuntimeError('Could not load publication dates from GitHub.')
+                    return commits
+
+                history = path_history(path, revision)
+                # The commits API does not follow renames. Read former paths as
+                # they stood at the move, so later reuse cannot alter this post.
+                moved_at = history[-1].get('sha', revision)
+                for old_path in previous_paths:
+                    history.extend(path_history(old_path, moved_at))
+                unique_history = {item.get('sha') or json.dumps(item, sort_keys=True): item for item in history}
+                dates = [item['commit']['committer']['date'] for item in unique_history.values()]
+                newest, oldest = max(dates), min(dates)
                 kind = 'post' if path.startswith('_posts/') else 'page'
                 slug = re.sub(r'^\d{4}-\d{2}-\d{2}-', '', Path(path).stem)
                 permalink = fields.get('permalink') or '/posts/'+slug+'/'
@@ -206,8 +224,9 @@ def writing_index():
                     'path': path, 'sourceSha': sha, 'kind': kind,
                     'title': fields.get('title', ''), 'quote': fields.get('quote', ''),
                     'html': html, 'date': fields.get('date', oldest),
-                    'publishedAt': oldest, 'editedAt': newest if len(history) > 1 else None,
+                    'publishedAt': oldest, 'editedAt': newest if len(unique_history) > 1 else None,
                     'url': '/personal-blog'+permalink, 'permalink': permalink,
+                    'previousPaths': previous_paths, 'previousSourceSha': previous_sha,
                     'references': fields.get('references', []), 'notes': fields.get('notes', []),
                     'referenceKey': fields.get('reference_key'),
                     'quoteReference': fields.get('quote_reference'), 'quoteLocator': fields.get('quote_locator')

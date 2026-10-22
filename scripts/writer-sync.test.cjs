@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {merge,reconcileMissing,validPublishedIndex}=require('../assets/writer-sync.js');
+const {merge,reconcileMissing,validPublishedIndex,migratePublished}=require('../assets/writer-sync.js');
 const a={id:'a',title:'First'},b={id:'b',title:'Second'};
 test('a stale tab cannot resurrect a deleted draft',()=>{
   const result=merge([a,b],[{...a,title:'Stale edit'},b],{drafts:[b],deleted:['a']},[],()=> 'recovered');
@@ -82,4 +82,53 @@ test('partial or malformed publication indexes cannot authorize reconciliation',
  assert.equal(validPublishedIndex({posts:[{...entry,sourceSha:'a'.repeat(40)}],pages:[]},true),true);
  assert.equal(validPublishedIndex({posts:[],pages:[]}),true);
  for(const index of [null,{}, {posts:[]},{pages:[]},{posts:null,pages:[]},{posts:[entry,entry],pages:[]},{posts:[{...entry,html:null}],pages:[]},{posts:[{...entry,path:'../outside.md'}],pages:[]}])assert.equal(validPublishedIndex(index),false);
+});
+
+test('page conversion preserves authored edits and history while translating only the known base revision',()=>{
+ const old={...make('page-id','Research','Private words.'),kind:'page',sourcePath:'pages/research.md',targetPath:'pages/research.md',sourceSha:'a'.repeat(40),referenceKey:'original-key',permalink:'/evidence/research/',references:[{id:'r',title:'Source',url:'https://example.org'}],notes:[{id:'n',text:'My note'}],savedVersions:[{kind:'page',body:'Older writing'}],pendingPublication:{path:'pages/research.md',content:'Old request'}};
+ old.publishedFingerprint=writing({...old,doc:[{runs:[{text:'Published words.'}]}]});
+ const entry={kind:'post',path:'_posts/2026-10-21-research.md',sourceSha:'b'.repeat(40),previousPaths:[old.sourcePath],previousSourceSha:old.sourceSha,permalink:old.permalink,referenceKey:'original-key',date:'2026-10-21T12:00:00Z',publishedAt:'2026-10-21T12:00:00Z'};
+ const original=structuredClone(old),result=migratePublished([old],[entry]),converted=result.drafts[0];
+ assert.deepEqual(old,original,'migration never mutates the input');
+ assert.equal(result.changed,true);assert.equal(result.paths.get(old.sourcePath),entry.path);
+ assert.equal(converted.id,old.id);assert.equal(converted.kind,'post');assert.equal(converted.sourcePath,entry.path);assert.equal(converted.targetPath,entry.path);assert.equal(converted.sourceSha,entry.sourceSha);
+ assert.equal(converted.permalink,old.permalink);assert.equal(converted.originalDate,entry.date);assert.equal(converted.referenceKey,old.referenceKey);
+ for(const field of ['title','quote','doc','references','notes','savedVersions'])assert.deepEqual(converted[field],old[field],field);
+ const baseline=JSON.parse(old.publishedFingerprint);baseline[0]='post';
+ assert.equal(converted.publishedFingerprint,JSON.stringify(baseline));
+ assert.notEqual(writing(converted),converted.publishedFingerprint,'genuine edits remain edits');
+ assert.equal(converted.pendingPublication,undefined,'old-route retries must be rebuilt');
+ assert.equal(migratePublished(result.drafts,[entry]).changed,false,'migration is idempotent');
+ const reconciled=reconcileMissing(result.drafts,[entry.path],writing,()=>assert.fail('No recovered duplicate'));
+ assert.deepEqual(reconciled.deleted,[]);assert.deepEqual(reconciled.drafts,result.drafts);
+ const stale={...old,sourceSha:'c'.repeat(40)};
+ assert.equal(migratePublished([stale],[entry]).drafts[0].sourceSha,stale.sourceSha,'unrecognized bases must still conflict');
+ const laterPublication={...entry,sourceSha:'d'.repeat(40)};delete laterPublication.previousSourceSha;
+ const afterLaterPublication=migratePublished([old],[laterPublication]).drafts[0];
+ assert.equal(afterLaterPublication.sourcePath,entry.path,'routing history remains useful after later edits');
+ assert.equal(afterLaterPublication.sourceSha,old.sourceSha,'a consumed conversion token cannot translate an old page base onto newer writing');
+ const clean={...old,doc:[{runs:[{text:'Published words.'}]}]};
+ const migratedClean=migratePublished([clean],[entry]).drafts[0];
+ assert.equal(writing(migratedClean),migratedClean.publishedFingerprint,'clean writing stays clean');
+});
+
+test('route migration is explicit and a stale tab is remapped without losing new writing',()=>{
+ const old={...make('page','Page','Original.'),kind:'page',sourcePath:'pages/page.md',sourceSha:'a'.repeat(40)};
+ old.publishedFingerprint=writing(old);
+ const entry={kind:'post',path:'_posts/2026-10-21-page.md',sourceSha:'b'.repeat(40),previousPaths:[old.sourcePath],previousSourceSha:old.sourceSha};
+ assert.deepEqual(migratePublished([old],[{...entry,previousPaths:[]}]).drafts,[old]);
+ assert.deepEqual(migratePublished([old],[entry,{path:old.sourcePath,kind:'page'}]).drafts,[old],'live paths are never redirected');
+ const remote=migratePublished([old],[entry]).drafts;
+ const local={...old,doc:[{runs:[{text:'New offline writing.'}]}]};
+ const merged=merge([old],[local],{drafts:remote},[],()=>assert.fail('No replacement identity'));
+ const converted=migratePublished(merged.drafts,[entry]).drafts[0];
+ assert.deepEqual(converted.doc,local.doc);assert.equal(converted.sourcePath,entry.path);assert.equal(converted.kind,'post');
+ assert.equal(converted.sourceSha,entry.sourceSha);assert.ok(converted.savedVersions.length>0);
+});
+
+test('invalid or ambiguous migration metadata cannot authorize orphan cleanup',()=>{
+ const entry={path:'_posts/post.md',kind:'post',title:'Post',html:'<p>Text</p>',sourceSha:'a'.repeat(40),previousPaths:['pages/old.md'],previousSourceSha:'b'.repeat(40)};
+ assert.equal(validPublishedIndex({posts:[entry],pages:[]},true),true);
+ for(const patch of [{previousPaths:'pages/old.md'},{previousPaths:['../outside.md']},{previousPaths:[entry.path]},{previousPaths:['pages/old.md','pages/old.md']},{previousSourceSha:'invalid'}])assert.equal(validPublishedIndex({posts:[{...entry,...patch}],pages:[]},true),false);
+ assert.equal(validPublishedIndex({posts:[entry,{...entry,path:'_posts/other.md'}],pages:[]},true),false);
 });

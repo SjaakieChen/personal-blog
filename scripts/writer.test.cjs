@@ -238,3 +238,15 @@ test('editing an existing post keeps its file and original date', () => {
   assert.match(p.url,/edit\/main\/_posts/);
   assert.match(p.content,/2026-09-01T12:00:00Z/);
 });
+
+test('a converted page remains a post at its original public URL on later edits',()=>{
+  const p=prepare({...draft,sourcePath:'_posts/2026-10-21-research.md',originalDate:'2026-10-21T12:00:00Z',permalink:'/evidence/research/',referenceKey:'original-page-key',previousPaths:['pages/research.md'],previousSourceSha:'a'.repeat(40)});
+  assert.equal(p.filename,'_posts/2026-10-21-research.md');
+  assert.match(p.content,/^layout: post$/m);
+  assert.match(p.content,/^date: "2026-10-21T12:00:00Z"$/m);
+  assert.match(p.content,/^permalink: "\/evidence\/research\/"$/m);
+  assert.match(p.content,/^reference_key: "original-page-key"$/m);
+  assert.match(p.content,/^previous_paths: \["pages\/research.md"\]$/m);
+  assert.doesNotMatch(p.content,/^previous_source_sha:/m,'a later edit consumes the one-time conversion token');
+  assert.doesNotMatch(prepare(draft).content,/^(permalink|previous_paths|previous_source_sha):/m,'ordinary new posts retain normal routing');
+});

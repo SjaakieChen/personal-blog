@@ -43,7 +43,32 @@
   function validPublishedIndex(data,requireRevision=false) {
     if(!data || !Array.isArray(data.posts) || !Array.isArray(data.pages))return false;
     const entries=[...data.posts,...data.pages];
-    return entries.every(entry=>entry && typeof entry.title==='string' && typeof entry.html==='string' && /^(?:_posts|pages)\/[a-zA-Z0-9_-]+\.md$/.test(entry.path) && ['post','page'].includes(entry.kind) && (!requireRevision || /^[a-f0-9]{40}$/.test(entry.sourceSha))) && new Set(entries.map(entry=>entry.path)).size===entries.length;
+    const validPath=path=>typeof path==='string' && /^(?:_posts|pages)\/[a-zA-Z0-9_-]+\.md$/.test(path);
+    const previous=entries.flatMap(entry=>Array.isArray(entry?.previousPaths)?entry.previousPaths:[]);
+    return entries.every(entry=>entry && typeof entry.title==='string' && typeof entry.html==='string' && validPath(entry.path) && ['post','page'].includes(entry.kind) && (!requireRevision || /^[a-f0-9]{40}$/.test(entry.sourceSha)) && (entry.previousPaths==null || (Array.isArray(entry.previousPaths) && entry.previousPaths.every(path=>validPath(path) && path!==entry.path))) && (entry.previousSourceSha==null || /^[a-f0-9]{40}$/.test(entry.previousSourceSha))) && new Set(entries.map(entry=>entry.path)).size===entries.length && new Set(previous).size===previous.length;
+  }
+  function migratePublished(drafts,entries) {
+    const live=new Set(entries.map(entry=>entry.path)), paths=new Map();
+    let changed=false;
+    const migrated=drafts.map(draft=>{
+      const oldPath=draft.sourcePath || draft.targetPath;
+      if(!oldPath || live.has(oldPath))return draft;
+      const matches=entries.filter(entry=>entry.previousPaths?.includes(oldPath));
+      if(matches.length!==1)return draft;
+      const entry=matches[0],next={...draft,kind:entry.kind,sourcePath:entry.path,referenceKey:draft.referenceKey || entry.referenceKey || draft.id,previousPaths:entry.previousPaths,previousSourceSha:entry.previousSourceSha};
+      if(draft.targetPath)next.targetPath=entry.path;
+      for(const [field,value] of Object.entries({permalink:entry.permalink,originalDate:entry.date,publishedAt:entry.publishedAt,editedAt:entry.editedAt}))if(value!=null)next[field]=value;
+      // Only a known metadata-only move may translate the optimistic-lock base.
+      if(draft.sourceSha && draft.sourceSha===entry.previousSourceSha)next.sourceSha=entry.sourceSha;
+      try {
+        const fingerprint=JSON.parse(draft.publishedFingerprint);
+        if(Array.isArray(fingerprint) && fingerprint[0]===draft.kind){fingerprint[0]=entry.kind;next.publishedFingerprint=JSON.stringify(fingerprint);}
+      }catch{}
+      // Rebuild any retry request against the new route without changing writing.
+      delete next.pendingPublication;
+      paths.set(oldPath,entry.path);changed=true;return next;
+    });
+    return {drafts:migrated,changed,paths};
   }
   function reconcileMissing(drafts, paths, fingerprint, makeId, now=new Date().toISOString()) {
     const live=new Set(paths), missing=drafts.filter(d=>d.sourcePath && !live.has(d.sourcePath));
@@ -68,6 +93,6 @@
     }
     return {drafts:result,deleted,remapped,recovered};
   }
-  const api={merge,same,titleKey,validPublishedIndex,reconcileMissing};root.BlogDraftSync=api;
+  const api={merge,same,titleKey,validPublishedIndex,migratePublished,reconcileMissing};root.BlogDraftSync=api;
   if(typeof module!=='undefined' && module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

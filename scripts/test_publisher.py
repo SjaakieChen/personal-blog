@@ -271,6 +271,58 @@ class PublishingTests(unittest.TestCase):
         with patch.object(publisher,'repository_sources',return_value=('head',entries[1:])):
             self.assertEqual([p['title'] for p in publisher.writing_index()['posts']],['Old'])
 
+    def test_moved_page_index_preserves_dates_permalink_and_migration_metadata(self):
+        publisher.entry_cache.clear()
+        old_path = 'pages/evidence.md'
+        path = '_posts/2026-10-21-evidence.md'
+        fields = {'title': 'Evidence', 'date': '2026-10-21T10:00:00Z',
+                  'permalink': '/evidence/original/', 'previous_paths': [old_path, old_path],
+                  'previous_source_sha': 'a'*40}
+        def commit(sha, date):
+            return {'sha': sha, 'commit': {'committer': {'date': date}}}
+        moved = commit('move', '2026-10-22T15:00:00Z')
+        original = commit('original', '2026-10-21T10:00:00Z')
+        queries = []
+        def history(endpoint):
+            query = publisher.parse_qs(publisher.urlsplit(endpoint).query)
+            queries.append(query)
+            if query['path'] == [path]:
+                self.assertEqual(query['sha'], ['head'])
+                return [moved]
+            self.assertEqual(query['path'], [old_path])
+            self.assertEqual(query['sha'], ['move'])
+            return [moved, original]
+        with patch.object(publisher, 'repository_sources', return_value=('head', [(path, 'new-sha', fields, '<p>Words.</p>')])), patch.object(publisher, 'gh_api', side_effect=history):
+            result = publisher.writing_index()
+        self.assertEqual(len(queries), 2)
+        self.assertEqual(result['pages'], [])
+        entry = result['posts'][0]
+        self.assertEqual(entry['publishedAt'], original['commit']['committer']['date'])
+        self.assertEqual(entry['editedAt'], moved['commit']['committer']['date'])
+        self.assertEqual(entry['date'], fields['date'])
+        self.assertEqual(entry['permalink'], '/evidence/original/')
+        self.assertEqual(entry['url'], '/personal-blog/evidence/original/')
+        self.assertEqual(entry['previousPaths'], [old_path])
+        self.assertEqual(entry['previousSourceSha'], 'a'*40)
+        self.assertEqual(entry['html'], '<p>Words.</p>')
+
+    def test_moved_page_index_deduplicates_the_shared_move_commit(self):
+        publisher.entry_cache.clear()
+        moved = {'sha': 'move', 'commit': {'committer': {'date': '2026-10-22T15:00:00Z'}}}
+        fields = {'title': 'Moved', 'previous_paths': ['pages/moved.md']}
+        with patch.object(publisher, 'repository_sources', return_value=('head', [('_posts/2026-10-22-moved.md', 'dedup-sha', fields, '')])), patch.object(publisher, 'gh_api', return_value=[moved]):
+            self.assertIsNone(publisher.writing_index()['posts'][0]['editedAt'])
+
+    def test_moved_page_index_rejects_invalid_history_paths(self):
+        for old_paths in ['pages/a.md', ['../secret'], ['assets/private.md'], [None], ['_posts/new.md']]:
+            with self.subTest(previous_paths=old_paths):
+                publisher.entry_cache.clear()
+                fields = {'title': 'New', 'previous_paths': old_paths}
+                with patch.object(publisher, 'repository_sources', return_value=('head', [('_posts/new.md', 'invalid-sha', fields, '')])), patch.object(publisher, 'gh_api') as api:
+                    with self.assertRaisesRegex(ValueError, 'previous publication paths'):
+                        publisher.writing_index()
+                    api.assert_not_called()
+
     def test_only_content_paths_are_accepted(self):
         for path in ['../secret', '.github/workflows/pages.yml', 'assets/writer.js', 'pages/../../file.md']:
             with self.assertRaises(ValueError):publisher.publish({'path':path,'content':'---\nBad'})

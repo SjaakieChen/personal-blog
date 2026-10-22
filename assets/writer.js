@@ -216,17 +216,20 @@
       if(!Object.prototype.hasOwnProperty.call(prepared,'baseSha'))prepared.baseSha=d.sourceSha || null;
       const submitted=structuredClone(d);
       const originalDate=d.kind==='post'?JSON.parse(prepared.content.match(/^date: (.+)$/m)[1]):null;
-      const permalink=d.kind==='page'?JSON.parse(prepared.content.match(/^permalink: (.+)$/m)[1]):null;
+      const permalinkLine=prepared.content.match(/^permalink: (.+)$/m);
+      const permalink=permalinkLine?JSON.parse(permalinkLine[1]):null;
+      const previousSourceShaLine=prepared.content.match(/^previous_source_sha: (.+)$/m);
+      const previousSourceSha=previousSourceShaLine?JSON.parse(previousSourceShaLine[1]):undefined;
       if(!await save())throw new Error('Could not save the publication request. Use Save JSON before trying again.');
       publicationStatus('Sending “'+submitted.title+'” to GitHub…');
       const result=await api('/api/publish',{path:prepared.path,content:prepared.content,baseSha:prepared.baseSha},120000,'Publishing response timed out. Your draft is saved; retry safely.');
       const replacements=result.linkReplacements || {}, publicSubmitted=core.replaceDraftLinks(submitted,replacements);
       const wasPublished=!!submitted.sourcePath;
       const live=drafts.find(item=>item.id===submitted.id);
-      const publication={sourcePath:prepared.path,sourceSha:result.sha,publishedFingerprint:writingFingerprint(publicSubmitted)};
+      const publication={sourcePath:prepared.path,sourceSha:result.sha,publishedFingerprint:writingFingerprint(publicSubmitted),previousSourceSha};
       removedPaths.delete(prepared.path);
       if(submitted.kind==='post')publication.originalDate=originalDate;
-      else publication.permalink=permalink;
+      if(permalink)publication.permalink=permalink;
       if(!result.unchanged){if(wasPublished)publication.editedAt=result.time;else publication.publishedAt=result.time;}
       // Sync may replace draft objects while GitHub is responding. Update the live
       // record, retaining anything typed after the submitted version was captured.
@@ -248,7 +251,7 @@
       if(result.mediaPublished || Object.keys(replacements).length)window.dispatchEvent(new CustomEvent('blog-media-published'));
       const slug=prepared.path.split('/').pop().replace(/^\d{4}-\d{2}-\d{2}-/,'').replace(/\.md$/,'');
       if(current()?.id===submitted.id) {
-        $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(saved.kind==='page'?saved.permalink:'/posts/'+slug+'/');$('view-published').hidden=false;
+        $('view-published').href='https://sjaakiechen.github.io/personal-blog'+(saved.permalink || '/posts/'+slug+'/');$('view-published').hidden=false;
         publicationStatus(result.unchanged?'This version is already saved on GitHub.':'Saved to GitHub. The blog is updating…','Saved to GitHub');
       }
       if(result.commit)watchDeployment(result.commit,submitted.title,false,submitted.id);
@@ -387,11 +390,14 @@
     return fingerprint===(entry && writingFingerprint(entryDraft(entry))) || fingerprint===d.publishedFingerprint?'published':'edit';
   }
   function refreshPublishedSnapshot(d,entry,fresh=entryDraft(entry)) {
-    Object.assign(d,{title:fresh.title,quote:fresh.quote,doc:fresh.doc,references:fresh.references,notes:fresh.notes,referenceKey:fresh.referenceKey,quoteReference:fresh.quoteReference,quoteLocator:fresh.quoteLocator,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});
+    Object.assign(d,{title:fresh.title,quote:fresh.quote,doc:fresh.doc,references:fresh.references,notes:fresh.notes,referenceKey:fresh.referenceKey,quoteReference:fresh.quoteReference,quoteLocator:fresh.quoteLocator,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt,previousPaths:entry.previousPaths,previousSourceSha:entry.previousSourceSha});
     d.publishedFingerprint=writingFingerprint(d);delete d.conflict;delete d.pendingPublication;
   }
   function reconcilePublished() {
-    let changed=false;
+    const migration=sync.migratePublished(drafts,published);
+    drafts=migration.drafts;
+    if(migration.paths.has(previewPath)){previewPath=migration.paths.get(previewPath);sessionStorage.setItem(key+'-published-preview',previewPath);}
+    let changed=migration.changed;
     for(const d of drafts) {
       const entry=published.find(p=>p.path===(d.sourcePath || d.targetPath)) || (!d.sourcePath && !d.recoveredFrom && published.find(p=>p.kind===d.kind && sync.titleKey(p.title)===sync.titleKey(d.title)));
       if(!entry)continue;
@@ -401,13 +407,13 @@
       if(d.sourcePath && d.sourceSha!==entry.sourceSha && d.publishedFingerprint===writingFingerprint(d)) {
         refreshPublishedSnapshot(d,entry,fresh);changed=true;
       }
-      const metadata={};
+      const metadata={previousPaths:entry.previousPaths,previousSourceSha:entry.previousSourceSha};
       if(!d.sourcePath){Object.assign(metadata,{sourcePath:entry.path,sourceSha:entry.sourceSha,referenceKey:d.referenceKey || entry.referenceKey,publishedFingerprint:fingerprint,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt});}
       if(!d.publishedFingerprint || writingFingerprint(d)===fingerprint) {
         metadata.publishedFingerprint=fingerprint;
         if(writingFingerprint(d)===fingerprint)Object.assign(metadata,{sourceSha:entry.sourceSha,publishedAt:entry.publishedAt,editedAt:entry.editedAt});
       }
-      for(const [key,value] of Object.entries(metadata))if(value!==undefined && d[key]!==value){d[key]=value;changed=true;}
+      for(const [key,value] of Object.entries(metadata))if(value!==undefined && !sync.same(d[key],value)){d[key]=value;changed=true;}
     }
     return changed;
   }
@@ -548,7 +554,7 @@
     }
     else {
       const template=document.createElement('template');template.innerHTML=entry.html;
-      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],notes:entry.notes || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt};
+      const d={...newDraft(),title:entry.title,quote:entry.quote || '',kind:entry.kind,doc:readDocument(template.content),references:entry.references || [],notes:entry.notes || [],referenceKey:entry.referenceKey,quoteReference:entry.quoteReference,quoteLocator:entry.quoteLocator,sourcePath:entry.path,sourceSha:entry.sourceSha,originalDate:entry.date,permalink:entry.permalink,publishedAt:entry.publishedAt,editedAt:entry.editedAt,previousPaths:entry.previousPaths,previousSourceSha:entry.previousSourceSha};
       d.publishedFingerprint=writingFingerprint(d);
       drafts.unshift(d);active=d.id;
     }

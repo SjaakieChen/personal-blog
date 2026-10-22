@@ -1,5 +1,5 @@
 ---
-layout: page
+layout: post
 title: "Emergence and robust decision making"
 quote: "\"A game so simple he called it Life\""
 render_with_liquid: false
@@ -9,6 +9,9 @@ quote_reference: "zucconi-conway-life-2020"
 quote_locator: "Introduction; paraphrased wording"
 notes: [{"id":"72c15a8d-8a13-41da-b3d0-a6911ee30b60","text":"Except for arguably quantum mechanics, which is a much too complicated topic do discuss here."},{"id":"8f8fc76e-b29e-46d3-b452-5f6ae39c1fc8","text":"with a memory system attached"},{"id":"ai-solved-scaling-view","text":"For the neural-network wave, my chosen starting point is AlexNet in 2012. “Solved” is my view that remaining work is only scaling and exploring the resulting behaviour. Which is definitely not solved btw","citations":[{"reference":"alexnet-2012","locator":"2012 ImageNet breakthrough"},{"reference":"kaplan-scaling-2020","locator":"Empirical scaling relationships"}]}]
 permalink: "/emergence-and-robust-decision-making-ba0e6420/"
+date: "2026-10-22T22:44:31+02:00"
+previous_paths: ["pages/emergence-and-robust-decision-making-ba0e6420.md"]
+previous_source_sha: "f4a804f48a6069b3290955dfeae61e93d5ebd792"
 ---
 
 <p>People keep asking me what I want to study next, and I keep having to telling them a long story about Conway, AI, the brain and robustness. So, for practice, I will write it down for once here, to keep the story consistent.</p>

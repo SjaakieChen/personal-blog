@@ -1,5 +1,5 @@
 ---
-layout: page
+layout: post
 title: "CT scanner: object reconstruction using shadows"
 quote: ""
 render_with_liquid: false
@@ -9,6 +9,9 @@ quote_reference: ""
 quote_locator: ""
 notes: []
 permalink: "/evidence/ct-scanner/"
+date: "2026-10-21T16:38:59+02:00"
+previous_paths: ["pages/ct-scanner-evidence.md"]
+previous_source_sha: "7b69bdb7ed17d119afdd8c0df1c76a2be062bfec"
 ---
 
 <p>So, in my first year at Imperial we had to do a summer project. What that entails is, in the last term of the year, after the exams have finished. The students are asked to investigate or make anything that leads to a fun demo. What we thought would be cool was, to see if we could make an item scanner. I thought this was an especially good idea. Back then and still now it seems to me obvious, that we need a good way of scanning physical objects into the digital. Make the manipulations happen there, that makes everything cheaper and allows us to use the infrastructure of the past 3 decades like cad, blender or ai to help iterate.</p>

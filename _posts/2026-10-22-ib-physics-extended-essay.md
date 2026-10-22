@@ -1,5 +1,5 @@
 ---
-layout: page
+layout: post
 title: "young me doing (reasonably good) physics work"
 quote: ""
 render_with_liquid: false
@@ -9,6 +9,9 @@ quote_reference: ""
 quote_locator: ""
 notes: [{"id":"ib-internship-recollection","text":"These are approximate figures the person overseeing that part of the factory told me. The manager said they did, on average, thousands of alignments a day, and I observed roughly one alignment every three seconds per worker. Their monthly was about 8000 CNY. But most of them got end of year bonuses so it's probably slightly more."}]
 permalink: "/evidence/ib-physics-extended-essay/"
+date: "2026-10-22T20:59:01+02:00"
+previous_paths: ["pages/ib-physics-extended-essay.md"]
+previous_source_sha: "561510f449b2d5f57fe9643538b0a29cc1244e61"
 ---
 
 <p>In my second year of high-school, one year from graduating, everyone who did the IB curriculum needed to choose something to write their &quot;Extended essay&quot; about.<sup class="citation" contenteditable="false" data-reference="ib-dp-extended-essay-2016" data-locator="p. 1, Course description and aims"><a href="#ref-3c1a1521-dc72-470c-8b4d-34a7e091ff05-1" aria-label="Reference 1, p. 1, Course description and aims" title="p. 1, Course description and aims">[1]</a></sup> Think of this as the main piece of work, other than the exams, that one needed to do for graduating. <br><br>I chose physics and by extension it was about lasers what I wrote on. <a href="#media-evidence--ib-physics-extended-essay-page-1">What I ended up doing</a> was; finding the characteristic beam profile that comes out of a fiber. And I thought of a few ways of doing this but ended up using a second fiber, measuring the power found at different locations in 3D space produced by the first fiber. Then just guess the laser beam profile, seeing if it could fit the power I measured. (spoiler alert <a href="#media-evidence--ib-physics-extended-essay-page-16">it is a Gaussian</a>)<sup class="citation" contenteditable="false" data-reference="marcuse-single-mode-fiber-splices-1977" data-locator="p. 703, Abstract and §I (single-mode fiber fields)"><a href="#ref-3c1a1521-dc72-470c-8b4d-34a7e091ff05-2" aria-label="Reference 2, p. 703, Abstract and §I (single-mode fiber fields)" title="p. 703, Abstract and §I (single-mode fiber fields)">[2]</a></sup></p>

@@ -135,7 +135,10 @@
     metadata.push('reference_key: '+JSON.stringify(key.replace(/^ref-/,'')), 'references: '+JSON.stringify(references), 'quote_reference: '+JSON.stringify(draft.quote?.trim()?draft.quoteReference || '':''), 'quote_locator: '+JSON.stringify(draft.quote?.trim()?draft.quoteLocator || '':''));
     metadata.push('notes: '+JSON.stringify(usedNotes(doc,notes)));
     if(draft.kind==='post') metadata.push(`date: ${JSON.stringify(draft.originalDate || now.toISOString())}`);
-    else metadata.push(`permalink: ${JSON.stringify(draft.permalink || '/'+name+'/')}`);
+    if(draft.kind==='page' || draft.permalink) metadata.push(`permalink: ${JSON.stringify(draft.permalink || '/'+name+'/')}`);
+    if(draft.previousPaths?.length) metadata.push('previous_paths: '+JSON.stringify(draft.previousPaths));
+    // The source SHA is a one-time token for the metadata-only conversion.
+    // Later publications keep routing history but consume that translation token.
     const html=(render(doc,references,key,notes)+'\n'+renderNotes(doc,notes,key,references)+'\n'+renderReferences(references,key)).replace(/{/g,'&#123;').replace(/}/g,'&#125;');
     const content=metadata.concat(['---','',html,'']).join('\n');
     const url=draft.sourcePath ? 'https://github.com/SjaakieChen/personal-blog/edit/main/'+filename : 'https://github.com/SjaakieChen/personal-blog/new/main?filename='+encodeURIComponent(filename);
