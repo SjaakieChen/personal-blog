@@ -94,7 +94,7 @@
           if(!current())active=drafts[0].id;
           baseline=structuredClone(drafts);deletedDrafts=new Set(merged.deleted);
           cloudBase={drafts:remote.drafts,deleted:remote.deleted};localStorage.setItem(cloudBaseKey,JSON.stringify(cloudBase));
-          if(!sync.same(before,current())){load();restoreWriterView(view);}else renderNav();
+          if(!sync.same(before,current()))reloadWriter(view);else renderNav();
         });
         try {
           const saved=await api('/api/drafts',{revision:remote.revision,...outgoing},syncTimeout);
@@ -352,7 +352,7 @@
       drafts=merged.drafts;deletedDrafts=new Set(merged.deleted);active=nextActive;baseline=structuredClone(drafts);
       // The legacy copy is only an export for older tabs; it cannot replace the canonical store.
       try{localStorage.setItem(key,JSON.stringify({version:3,drafts,active,deleted:merged.deleted}));sessionStorage.setItem(key+'-active',active);}catch{}
-      if(!sync.same(previous,current()) || oldActive!==active){const view=captureWriterView();load();restoreWriterView(view);}
+      if(!sync.same(previous,current()) || oldActive!==active)reloadWriter({...captureWriterView(),draft:oldActive});
       else renderNav();
       $('save-status').textContent=titleConflict || 'Saved on this device'+(current().updatedAt?' · '+new Date(current().updatedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
       return true;
@@ -427,14 +427,20 @@
     $('post-time').textContent=format(entry.publishedAt)+(entry.editedAt?' · Edited '+format(entry.editedAt):'');
   }
   function empties() {for(const id of ['title','quote','body']) $(id).dataset.empty=String(!$(id).textContent.trim());}
-  function load() {
+  function load(preserveEditing=false) {
     titleConflict='';$('title').removeAttribute('aria-invalid');
-    const d=current();$('title').textContent=d.title;$('quote').textContent=d.quote;
-    $('body').innerHTML=core.render(d.doc,d.references,core.referenceKey(d),d.notes);$('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
+    const d=current();
+    for(const id of ['title','quote'])if(!preserveEditing || $(id).textContent!==d[id])$(id).textContent=d[id];
+    const html=core.render(d.doc,d.references,core.referenceKey(d),d.notes);
+    // Sync also changes history and publication metadata. Leave unchanged writing
+    // nodes in place so the browser retains its caret, composition and undo state.
+    const replaceBody=!preserveEditing || core.render(readDocument($('body')),d.references,core.referenceKey(d),d.notes)!==html;
+    if(replaceBody)$('body').innerHTML=html;
+    $('kind').value=d.kind;$('kind').disabled=!!d.sourcePath || !!d.targetPath;
     for(const id of ['title','quote','body']){$(id).contentEditable=publishedPreview?'false':id==='body'?'true':'plaintext-only';$(id).setAttribute('aria-readonly',String(!!publishedPreview));}
     for(const button of document.querySelectorAll('[data-command],#add-reference,#add-note,#restore'))button.disabled=!!publishedPreview;
     $('publish').hidden=!!publishedPreview;$('resume-edits').hidden=!publishedPreview;$('published-version').hidden=!publishedPreview;
-    $('publish-panel').hidden=true;$('view-published').hidden=true;selectionRange=null;timestamp(d);empties();renderNav();
+    $('publish-panel').hidden=true;$('view-published').hidden=true;if(replaceBody)selectionRange=null;timestamp(d);empties();renderNav();
     renderReferencePreview();
     updateDeleteButton();
   }
@@ -539,6 +545,46 @@
   function restoreWriterView(view) {
     const restore=()=>{if(view?.draft===active)for(const p of view.positions)p.el.scrollTo(p.left,p.top);};
     restore();requestAnimationFrame(restore);
+  }
+  function editorStructure(node) {
+    return node.nodeType===Node.TEXT_NODE?'#text':'('+node.nodeName+Array.from(node.childNodes,editorStructure).join('')+')';
+  }
+  function captureEditorSelection() {
+    const editor=document.activeElement, s=window.getSelection();
+    if(!['title','quote','body'].includes(editor?.id) || !s.rangeCount || !editor.contains(s.anchorNode) || !editor.contains(s.focusNode))return null;
+    const point=(node,offset)=>{
+      const path=[];let child=node;
+      while(child!==editor){path.unshift(Array.prototype.indexOf.call(child.parentNode.childNodes,child));child=child.parentNode;}
+      const prefix=document.createRange();prefix.selectNodeContents(editor);prefix.setEnd(node,offset);
+      return {node,offset,path,textOffset:prefix.toString().length};
+    };
+    return {editor,structure:editorStructure(editor),anchor:point(s.anchorNode,s.anchorOffset),focus:point(s.focusNode,s.focusOffset)};
+  }
+  function restoreEditorSelection(saved) {
+    if(!saved)return;
+    const {editor,anchor,focus}=saved;
+    const sameStructure=saved.structure===editorStructure(editor);
+    const resolve=point=>{
+      const boundary=node=>[node,Math.min(point.offset,node.nodeType===Node.TEXT_NODE?node.length:node.childNodes.length)];
+      if(editor.contains(point.node))return boundary(point.node);
+      let node=editor;
+      for(const index of point.path){node=node.childNodes[index];if(!node)break;}
+      // Keep paragraph/line-break boundaries when the replacement has the same
+      // structure; clamp a caret if the remote text became shorter.
+      if(sameStructure && node?.nodeType===point.node.nodeType)return boundary(node);
+      const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);let remaining=point.textOffset,last=null;
+      while((node=walker.nextNode())){if(remaining<=node.length)return [node,remaining];remaining-=node.length;last=node;}
+      return last?[last,last.length]:[editor,editor.childNodes.length];
+    };
+    const start=resolve(anchor),end=resolve(focus),s=window.getSelection();
+    if(s.anchorNode!==start[0] || s.anchorOffset!==start[1] || s.focusNode!==end[0] || s.focusOffset!==end[1]) {
+      editor.focus({preventScroll:true});s.setBaseAndExtent(...start,...end);
+    }
+    if(editor.id==='body')selectionRange=s.getRangeAt(0).cloneRange();
+  }
+  function reloadWriter(view=captureWriterView()) {
+    const sameDraft=view.draft===active, selection=sameDraft?captureEditorSelection():null;
+    load(sameDraft);restoreEditorSelection(selection);restoreWriterView(view);
   }
   let referenceTarget='body', referenceRange=null, importedCitation=false, referenceView=null;
   let editingNote=null, noteRange=null, noteView=null;
@@ -743,7 +789,7 @@
       localStorage.setItem(syncKey,JSON.stringify(state));
       restore({...state,active:data.id});baseline=structuredClone(drafts);deletedDrafts=new Set(state.deleted || []);
     });
-    load();restoreWriterView(view);
+    reloadWriter(view);
     if(await save())$('index-status').textContent='Draft updated. Previous version kept in Save JSON.';
   }
   $('restore-file').addEventListener('change',async()=>{
@@ -769,7 +815,7 @@
     published=[...data.posts,...data.pages].filter(p=>!removedPaths.has(p.path)).sort(newestFirst('publishedAt'));
     const beforeReconcile=structuredClone(current()),reconcileView=captureWriterView();
     const reconciled=reconcilePublished();
-    if(!publishedPreview && !sync.same(beforeReconcile,current())){load();restoreWriterView(reconcileView);}
+    if(!publishedPreview && !sync.same(beforeReconcile,current()))reloadWriter(reconcileView);
     let cleanup=false;
     if(isPrivate && !publishing) {
       const result=sync.reconcileMissing(drafts,published.map(p=>p.path),writingFingerprint,()=>crypto.randomUUID());
@@ -779,7 +825,7 @@
         if(!drafts.length)drafts.push(newDraft());
         active=result.remapped.get(active) || (drafts.some(d=>d.id===active)?active:drafts[0].id);
         cleanup=true;
-        if(!sync.same(previous,current())){load();restoreWriterView(view);}
+        if(!sync.same(previous,current()))reloadWriter(view);
       }
     }
     renderNav();updateDeleteButton();
