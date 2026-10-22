@@ -33,6 +33,45 @@
     target.dispatchEvent(new CustomEvent('blog-media-reveal',{bubbles:true,detail:{target}}));
     target.scrollIntoView({block:'start'});
   }
+  // Native fragment history does not consistently restore the independently
+  // scrolling reading pane. Keep its position per entry without replacing
+  // other application history state or writing state on every scroll event.
+  const scrollKey='blogMainScrollEntry',positions=new Map();
+  let entry=0,activeEntry=null,restoring=false,restoration=0;
+  const main=()=>document.querySelector('.main');
+  function rememberScroll() {
+    const pane=main();
+    if(!restoring && pane && activeEntry && history.state?.[scrollKey]===activeEntry)
+      positions.set(activeEntry,{top:pane.scrollTop,left:pane.scrollLeft});
+  }
+  function newEntryState() {
+    activeEntry=Date.now().toString(36)+'-'+(++entry);
+    return {...history.state,[scrollKey]:activeEntry};
+  }
+  function identifyEntry() {
+    if(!main())return;
+    activeEntry=history.state?.[scrollKey] || null;
+    if(!activeEntry)history.replaceState(newEntryState(),'');
+    rememberScroll();
+  }
+  identifyEntry();
+  document.addEventListener('scroll',event=>{if(event.target===main())rememberScroll();},true);
+  // Capture the reading position before feed expansion or media navigation.
+  window.addEventListener('click',event=>{
+    if(event.button===0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey)rememberScroll();
+  },true);
+  window.addEventListener('popstate',event=>{
+    const position=positions.get(event.state?.[scrollKey]);
+    activeEntry=event.state?.[scrollKey] || null;
+    const token=++restoration;restoring=!!position;
+    if(!position)return;
+    // Hash handlers reveal collapsed prose and media on the next layout frame.
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(token!==restoration)return;
+      main()?.scrollTo({top:position.top,left:position.left,behavior:'instant'});
+      requestAnimationFrame(()=>{if(token===restoration){restoring=false;rememberScroll();}});
+    }));
+  });
   window.BlogLinks={samePage};
   scan(document);
   new MutationObserver(records=>{
@@ -62,8 +101,12 @@
     // Editable links otherwise select text instead of following the figure.
     // Reveal a hidden carousel page before the browser computes its position.
     event.preventDefault();
-    if(location.hash!==destination.hash)history.pushState(history.state,'',destination.href);
+    if(location.hash!==destination.hash)history.pushState(main()?newEntryState():history.state,'',destination.href);
     revealMedia(target);
+    rememberScroll();
   },true);
-  window.addEventListener('hashchange',()=>{const target=mediaTarget(location.hash);if(target)revealMedia(target);});
+  window.addEventListener('hashchange',()=>{
+    const target=mediaTarget(location.hash);if(target)revealMedia(target);
+    if(!restoring){identifyEntry();requestAnimationFrame(rememberScroll);}
+  });
 })();

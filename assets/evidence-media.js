@@ -2,6 +2,7 @@
   'use strict';
   const scriptSource = root.document?.currentScript?.src;
   const siteBase = scriptSource ? new URL('../', scriptSource).href : null;
+  const assetVersion = scriptSource ? new URL(scriptSource).searchParams.get('v') : null;
   const demoCleanup = new WeakMap();
   const demoStart = new WeakMap();
   const demoCaptions = new WeakMap();
@@ -288,8 +289,11 @@
       demoCleanup.set(block, () => {
         view.clearTimeout(timer);view.removeEventListener('message', receive);frame.removeEventListener('error', fail);
       });
-      // Use the validated canonical URL; load=auto only controls this wrapper.
-      frame.src = item.url;stage.append(frame);
+      // Keep the canonical content link, but fetch the demo document for this
+      // site build so a cached HTML shell cannot lag behind its script bundle.
+      const entry = new URL(item.url);
+      if (assetVersion) entry.searchParams.set('v', assetVersion);
+      frame.src = entry.href;stage.append(frame);
     }
     load.addEventListener('click', start);
     if (autoLoad) demoStart.set(block, start);

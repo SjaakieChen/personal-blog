@@ -8,8 +8,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .sidebar, .main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; }
 .sidebar { padding: 64px 26px; background: var(--side); color: var(--side-ink); scrollbar-color: #70828d var(--side); }
 .timeline { display: grid; gap: 12px; border-left: 1px solid #647078; padding-left: 20px; font-size: 18px; line-height: 1.4; }
-.timeline a { width: fit-content; color: var(--side-ink); padding: 4px 0; text-decoration: underline; text-decoration-thickness: 1px; text-decoration-color: #a3a8a7; overflow-wrap: anywhere; }
-.timeline a:hover, .timeline a[aria-current] { color: #fff; text-decoration-color: #fff; }
+.timeline a { width: fit-content; color: var(--side-ink); padding: 4px 0; text-decoration: none; overflow-wrap: anywhere; }
+.timeline a:hover, .timeline a[aria-current] { color: #fff; }
 .nav-date { position: relative; margin-top: 24px; color: #b4bab9; font-size: 13px; font-weight: 400; letter-spacing: .3px; }
 .nav-date:first-child { margin-top: 0; }
 .nav-date::before { content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--side-ink); left: -24px; top: .42em; box-shadow: 0 0 0 3px var(--side); }

@@ -41,7 +41,7 @@ const server = http.createServer((req, res) => {
   if (['/writer', '/archive', '/writer-auto', '/archive-auto'].includes(pathname)) {
     const writer = pathname.startsWith('/writer'), content = pathname.endsWith('-auto') ? autoSource : source;
     res.setHeader('Content-Type', 'text/html');
-    res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><script src="/assets/evidence-media.js" defer></script><div class="reading-column"><article class="post"><div class="post-copy"><h1>Research</h1><div class="post-body" ' + (writer ? 'id="body" contenteditable="true"' : '') + '>' + content + '</div></div><aside class="post-media" ' + (writer ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article></div>');return;
+    res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><script src="/assets/evidence-media.js' + (pathname === '/writer-auto' ? '?v=fixture-version' : '') + '" defer></script><div class="reading-column"><article class="post"><div class="post-copy"><h1>Research</h1><div class="post-body" ' + (writer ? 'id="body" contenteditable="true"' : '') + '>' + content + '</div></div><aside class="post-media" ' + (writer ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article></div>');return;
   }
   const localPath = pathname.replace(/^\/personal-blog(?=\/)/, '');
   if (localPath === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end('{}');return;}
@@ -132,6 +132,8 @@ const server = http.createServer((req, res) => {
     await frame.locator('body[data-initialized="yes"]').waitFor();
     assert.equal(await pane.count(), 1, 'mixed manual/automatic links deduplicate to one inline demo');
     assert.equal(await pane.getAttribute('data-load-mode'), 'auto');
+    assert.equal(await pane.locator('iframe').getAttribute('src'), origin + demoPath + 'index.html?v=fixture-version',
+      'demo documents use the host build version without changing content links');
     assert.equal(await page.locator('#body').innerHTML(), autoSource, 'automatic loading preserves serialized draft links');
     assert.equal(requests.length, beforeAuto + 3, 'inline entry, JS and CSS load without a parent-button click');
     assert.equal(await pane.locator('iframe').getAttribute('sandbox'), 'allow-scripts');

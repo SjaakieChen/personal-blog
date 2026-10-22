@@ -2,7 +2,11 @@
 // Every endpoint is local; no real drafts or publication services are contacted.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {execFileSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..'),fragment='media-evidence--ib-physics-extended-essay-page-16';
+const linksSource=process.env.LINKS_SOURCE_REF
+  ?execFileSync('git',['show',process.env.LINKS_SOURCE_REF+':assets/links.js'],{cwd:root,encoding:'utf8'})
+  :fs.readFileSync(path.join(root,'assets/links.js'),'utf8');
 const imagePath='/assets/evidence/test/lenses.png',publicImage='https://sjaakiechen.github.io/personal-blog'+imagePath;
 const imageFragment='#media-image'+imagePath;
 let cloud,origin;
@@ -20,6 +24,7 @@ const server=http.createServer(async(req,res)=>{
   }
   if(url.pathname==='/write/'){res.setHeader('Content-Type','text/html');res.end(html(url.searchParams.has('images')));return;}
   if(url.pathname==='/assets/evidence/media.json'){res.setHeader('Content-Type','application/json');res.end('{}');return;}
+  if(url.pathname==='/assets/links.js'){res.setHeader('Content-Type','application/javascript');res.end(linksSource);return;}
   if(url.pathname===imagePath){res.setHeader('Content-Type','image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#abcdef"/></svg>');return;}
   if(url.pathname==='/full.pdf'){res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Full PDF destination</title>Full PDF destination');return;}
   if(url.pathname==='/feed'){
@@ -31,6 +36,17 @@ const server=http.createServer(async(req,res)=>{
     res.setHeader('Content-Type','text/html');res.end('<!doctype html><link rel="stylesheet" href="/styles.css"><script src="/assets/links.js" defer></script><script src="/assets/evidence-media.js" defer></script>'
       +'<div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column">'+[1,2].map(n=>
         '<article class="post" id="image-article-'+n+'"><div class="post-copy"><h1>Image example '+n+'</h1><div class="post-body"><p><a href="'+(n===2?imageFragment:publicImage)+'">Image '+n+'</a></p></div></div><aside class="post-media" hidden></aside></article>').join('')+'</div></main></div>');return;
+  }
+  if(url.pathname==='/history-feed'){
+    const prose='<p>Long-form writing gives the collapsed preview a reference farther down the post. Following that reference should not lose the original reading position.</p>';
+    res.setHeader('Content-Type','text/html');res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css">'
+      +'<script src="/assets/links.js" defer></script><script src="/assets/evidence-media.js" defer></script><script src="/assets/feed.js" defer></script>'
+      +'<div class="blog-shell"><aside class="sidebar">Blog</aside><main class="main"><div class="reading-column"><article class="post" id="history-post"><div class="post-copy"><h1>History example</h1>'
+      +'<blockquote class="quote">Opening quotation <sup class="citation"><a href="#history-reference">[1]</a></sup>. <a href="'+imageFragment+'">Image reference</a></blockquote>'
+      +'<div class="post-body" data-post-preview>'+prose.repeat(22)+'<p><a href="'+imageFragment+'">History illustration</a></p>'
+      +'<section class="references"><h2>References</h2><ol><li id="history-reference">Source for the opening quote.</li></ol></section></div>'
+      +'<button class="show-more" aria-expanded="false" hidden>Show more</button></div><aside class="post-media" hidden></aside></article>'
+      +'<article class="post"><div class="post-copy"><h2>Following post</h2><div class="post-body">'+prose.repeat(10)+'</div></div></article></div></main></div>');return;
   }
   const file=path.resolve(root,'.'+url.pathname);
   if(req.method==='GET' && file.startsWith(root+path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()){
@@ -162,7 +178,46 @@ const server=http.createServer(async(req,res)=>{
     assert.equal(new URL(imagePage.url()).hash,imageFragment,'native fragment navigation works without the click-interception script');
     assert.equal(imagePage.context().pages().length,1,'native fragment never opens the raw image in another window');
     await imagePage.close();
+    const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))));
+    const readingPosition=()=>page.locator('.main').evaluate(main=>main.scrollTop);
+    for(const width of [1280,390]){
+      await page.setViewportSize({width,height:900});
+      await page.goto(origin+'/history-feed');
+      await page.locator('.show-more').waitFor({state:'visible'});
+      await page.locator('.evidence-image img').evaluate(image=>{image.loading='eager';});
+      await page.waitForFunction(()=>document.querySelector('.evidence-image img')?.naturalWidth>0);
+      await page.evaluate(()=>{history.replaceState({...history.state,unrelated:{value:'preserved'}},'');document.querySelector('.main').scrollTop=0;});
+      await settle();
+      const before=await readingPosition();
+      await page.locator('.citation a').click();
+      await settle();
+      assert.equal(new URL(page.url()).hash,'#history-reference');
+      assert.equal(await page.locator('.show-more').getAttribute('aria-expanded'),'true','citation reveals its collapsed post');
+      assert.ok(await readingPosition()>500,'citation moves the nested reading pane');
+      await page.locator('.main').evaluate(main=>{main.scrollTop+=70;});
+      await settle();const referencePosition=await readingPosition();
+      await page.goBack();await settle();
+      assert.equal(new URL(page.url()).hash,'');
+      assert.ok(Math.abs(await readingPosition()-before)<2,width+'px Back restores the original citation reading position');
+      assert.deepEqual(await page.evaluate(()=>history.state.unrelated),{value:'preserved'},'navigation preserves existing history state fields');
+      await page.goForward();await settle();
+      assert.ok(Math.abs(await readingPosition()-referencePosition)<2,width+'px Forward restores the reference reading position, including subsequent scrolling');
+
+      await page.evaluate(()=>{history.replaceState({...history.state,mediaState:'kept'},'');document.querySelector('.main').scrollTop=0;});
+      await settle();const beforeImage=await readingPosition();
+      await page.getByRole('link',{name:'Image reference',exact:true}).click();
+      await settle();
+      assert.equal(new URL(page.url()).hash,imageFragment);
+      assert.ok(await readingPosition()>500,'same-page image navigation scrolls the nested pane');
+      assert.equal(await page.evaluate(()=>history.state.mediaState),'kept','media pushState keeps unrelated fields');
+      await page.locator('.main').evaluate(main=>{main.scrollTop+=45;});
+      await settle();const imagePosition=await readingPosition();
+      await page.goBack();await settle();
+      assert.ok(Math.abs(await readingPosition()-beforeImage)<2,width+'px Back restores the reading position before the media fragment');
+      await page.goForward();await settle();
+      assert.ok(Math.abs(await readingPosition()-imagePosition)<2,width+'px Forward restores the media reading position');
+    }
     assert.deepEqual(errors,[]);
-    console.log('Link browser checks passed: real editable writer, fragments and image pointers, unchanged documents, full-size image/PDF popups, modifier semantics and article isolation.');
+    console.log('Link browser checks passed: editable writer, media/citation history restoration on desktop/mobile, preserved history state/documents, full-size popups, modifier semantics and article isolation.');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
