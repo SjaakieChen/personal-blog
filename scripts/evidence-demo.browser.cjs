@@ -1,4 +1,4 @@
-// Local-only lazy loading and sandbox checks. No real drafts or emulator requests.
+// Local-only manual/inline loading and sandbox checks. No real draft requests.
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path');
@@ -6,6 +6,10 @@ const root = path.resolve(__dirname, '..');
 const demoPath = '/assets/evidence/drafts/demos/example/';
 const source = '<p>Explore the <a href="' + demoPath + 'index.html">3D machine emulator</a>.</p>'
   + '<p><a href="' + demoPath + 'index.html#again">Same emulator</a></p>';
+// A later opt-in reference should select inline mode for the same canonical
+// demo without duplicating it or changing the editable source links.
+const autoSource = '<p>Run the <a href="' + demoPath + 'index.html">Laughing / crying NCA</a>.</p>'
+  + '<p><a href="' + demoPath + 'index.html?load=auto#again">Same live demo</a></p>';
 const requests = [];
 let origin;
 const server = http.createServer((req, res) => {
@@ -26,9 +30,10 @@ const server = http.createServer((req, res) => {
     if (pathname.endsWith('/demo.css')) {res.setHeader('Content-Type', 'text/css');res.end('body{background:rgb(230,240,250);margin:12px}');return;}
   }
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-  if (pathname === '/writer' || pathname === '/archive') {
+  if (['/writer', '/archive', '/writer-auto', '/archive-auto'].includes(pathname)) {
+    const writer = pathname.startsWith('/writer'), content = pathname.endsWith('-auto') ? autoSource : source;
     res.setHeader('Content-Type', 'text/html');
-    res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><script src="/assets/evidence-media.js" defer></script><div class="reading-column"><article class="post"><div class="post-copy"><h1>Research</h1><div class="post-body" ' + (pathname === '/writer' ? 'id="body" contenteditable="true"' : '') + '>' + source + '</div></div><aside class="post-media" ' + (pathname === '/writer' ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article></div>');return;
+    res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><script src="/assets/evidence-media.js" defer></script><div class="reading-column"><article class="post"><div class="post-copy"><h1>Research</h1><div class="post-body" ' + (writer ? 'id="body" contenteditable="true"' : '') + '>' + content + '</div></div><aside class="post-media" ' + (writer ? 'id="evidence-media-preview"' : '') + ' hidden></aside></article></div>');return;
   }
   if (pathname === '/assets/evidence/media.json') {res.setHeader('Content-Type', 'application/json');res.end('{}');return;}
   if (pathname === '/styles.css' || pathname === '/assets/evidence-media.js') {
@@ -97,6 +102,84 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => document.querySelector('.post-media').hidden);
     assert.equal(await pane.count(), 0);
 
+    // Opt-in inline demos request their document immediately, retaining the
+    // sandbox/readiness protocol while removing the emulator loading wrapper.
+    const assertInlineControls = async (expectRetry = false) => {
+      assert.equal(await pane.getByRole('button', {name: /^(?:Load|Loading|Unload)\b/i}).count(), 0,
+        'inline media has no visible load or unload gate');
+      assert.doesNotMatch(await pane.innerText(), /\bemulator\b/i, 'inline media does not use emulator-specific chrome');
+      assert.equal(await pane.getByRole('button', {name: 'Retry', exact: true}).count(), expectRetry ? 1 : 0);
+    };
+    const beforeAuto = requests.length;
+    await page.goto(origin + '/writer-auto');
+    await frame.locator('body[data-initialized="yes"]').waitFor();
+    assert.equal(await pane.count(), 1, 'mixed manual/automatic links deduplicate to one inline demo');
+    assert.equal(await pane.getAttribute('data-load-mode'), 'auto');
+    assert.equal(await page.locator('#body').innerHTML(), autoSource, 'automatic loading preserves serialized draft links');
+    assert.equal(requests.length, beforeAuto + 3, 'inline entry, JS and CSS load without a parent-button click');
+    assert.equal(await pane.locator('iframe').getAttribute('sandbox'), 'allow-scripts');
+    assert.equal(await frame.locator('body').getAttribute('data-parent'), 'denied');
+    assert.equal(await frame.locator('body').getAttribute('data-storage'), 'denied');
+    await assertInlineControls();
+    await page.evaluate(() => dispatchEvent(new MessageEvent('message', {source: window, data: {type: 'blog-demo-ready'}})));
+    assert.equal(await pane.getAttribute('data-state'), 'loading', 'inline mode still rejects unrelated ready messages');
+    await frame.getByRole('button', {name: 'Initialize'}).click();
+    await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'ready');
+    await assertInlineControls();
+    assert.equal(await pane.getByRole('status').count(), 0, 'ready inline media has no visible host status wrapper');
+    const autoRequests = requests.length;
+    await page.evaluate(() => { window.originalInlineFrame = document.querySelector('.evidence-demo iframe'); });
+    await page.locator('#body a').first().evaluate(link => { link.textContent = 'Updated NCA caption'; });
+    await page.waitForFunction(() => document.querySelector('.evidence-demo iframe').title === 'Updated NCA caption');
+    await page.evaluate(() => BlogEvidenceMedia.renderPane(document.getElementById('body'), document.getElementById('evidence-media-preview')));
+    assert.equal(await page.evaluate(() => originalInlineFrame === document.querySelector('.evidence-demo iframe')), true,
+      'inline caption edits and explicit redraws preserve the live frame');
+    assert.equal(requests.length, autoRequests, 'inline editor redraws do not restart the simulation');
+    await frame.getByRole('button', {name: 'Fail', exact: true}).click();
+    await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'error');
+    assert.equal(await pane.locator('iframe').count(), 0, 'failed inline content is removed');
+    await assertInlineControls(true);
+    assert.match(await pane.getByRole('status').textContent(), /could not load/i);
+    await pane.getByRole('button', {name: 'Retry', exact: true}).click();
+    await frame.locator('body[data-initialized="yes"]').waitFor();
+    assert.equal(requests.length, autoRequests + 3, 'inline retry loads one fresh document and bundle');
+    await assertInlineControls();
+    await frame.getByRole('button', {name: 'Initialize'}).click();
+    await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'ready');
+    await assertInlineControls();
+
+    // Removing the sole opt-in reference restores the original manual mode.
+    // Restoring the marker creates one new automatic frame; the old one dies.
+    const beforeModeChange = requests.length;
+    await page.locator('#body a').last().evaluate(link => { link.href = link.pathname + '#again'; });
+    await pane.getByRole('button', {name: 'Load emulator', exact: true}).waitFor();
+    assert.equal(await pane.getAttribute('data-load-mode'), 'manual');
+    assert.equal(await pane.locator('iframe').count(), 0, 'switching to manual mode disposes the active inline frame');
+    assert.equal(requests.length, beforeModeChange, 'manual mode does not request a replacement frame');
+    await page.locator('#body a').last().evaluate(link => { link.href = link.pathname + '?load=auto#again'; });
+    await frame.locator('body[data-initialized="yes"]').waitFor();
+    assert.equal(requests.length, beforeModeChange + 3, 'opting back in starts one new frame');
+    await frame.getByRole('button', {name: 'Initialize'}).click();
+    await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'ready');
+    await assertInlineControls();
+    await pane.getByRole('button', {name: 'Fullscreen', exact: true}).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('evidence-demo'));
+    await page.evaluate(() => document.exitFullscreen());
+    await page.waitForFunction(() => !document.fullscreenElement);
+    await page.locator('#body').evaluate(body => { body.innerHTML = '<p>Plain writing.</p>'; });
+    await page.waitForFunction(() => document.querySelector('.post-media').hidden);
+    assert.equal(await pane.count(), 0, 'removing inline references disposes the frame and media block');
+    const beforeReinsert = requests.length;
+    await page.locator('#body').evaluate((body, html) => { body.innerHTML = html; }, autoSource);
+    await frame.locator('body[data-initialized="yes"]').waitFor();
+    assert.equal(requests.length, beforeReinsert + 3, 'reinserting inline content starts exactly one fresh frame');
+    await frame.getByRole('button', {name: 'Initialize'}).click();
+    await page.waitForFunction(() => document.querySelector('.evidence-demo').dataset.state === 'ready');
+    await assertInlineControls();
+    await page.setViewportSize({width: 390, height: 844});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'inline media fits narrow screens');
+    await page.setViewportSize({width: 1280, height: 900});
+
     // Shorten only the host readiness timeout, then exercise a silent iframe.
     await page.addInitScript(() => {
       const originalTimeout = window.setTimeout;
@@ -114,7 +197,19 @@ const server = http.createServer((req, res) => {
     assert.equal(await pane.locator('iframe').count(), 0);
     await page.setViewportSize({width: 390, height: 844});
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'controls do not overflow narrow screens');
+
+    // Public inline content eagerly loads too, but a missing ready handshake
+    // still produces a recoverable error instead of a permanent blank frame.
+    const beforePublicAuto = requests.length;
+    await page.goto(origin + '/archive-auto');
+    await page.waitForFunction(() => document.querySelector('.evidence-demo')?.dataset.state === 'error');
+    assert.equal(await page.locator('.post-body').innerHTML(), autoSource);
+    assert.equal(requests.length, beforePublicAuto + 3, 'public inline media also loads without any click');
+    assert.equal(await pane.locator('iframe').count(), 0, 'timed-out inline frame is disposed');
+    await assertInlineControls(true);
+    assert.match(await pane.getByRole('status').textContent(), /could not load/i);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'inline retry state fits narrow screens');
     assert.deepEqual(errors, []);
-    console.log('Demo browser checks passed: zero eager requests, exact-window readiness, CSP isolation, lifecycle, retry, timeout, fullscreen, and clean draft links.');
+    console.log('Demo browser checks passed: manual lazy loading, opt-in inline autoload without emulator chrome, exact-window readiness, CSP isolation, redraw preservation, mode changes, lifecycle, retry, timeout, fullscreen, and clean draft links.');
   } finally {await browser.close();await new Promise(resolve => server.close(resolve));}
 })().catch(error => {console.error(error);server.close();process.exitCode = 1;});

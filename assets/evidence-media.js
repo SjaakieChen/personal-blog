@@ -3,6 +3,7 @@
   const scriptSource = root.document?.currentScript?.src;
   const siteBase = scriptSource ? new URL('../', scriptSource).href : null;
   const demoCleanup = new WeakMap();
+  const demoStart = new WeakMap();
   const mediaAnchors = new WeakMap();
   const paneLayouts = new WeakMap();
 
@@ -140,11 +141,22 @@
       const value = source.getAttribute('href'), id = youtubeId(value);
       const image = imageURL(value, body.ownerDocument.baseURI, siteBase);
       const demo = demoURL(value, body.ownerDocument.baseURI, siteBase);
+      const loadModes = demo ? new URL(value, body.ownerDocument.baseURI).searchParams.getAll('load') : [];
+      const autoLoad = loadModes.length === 1 && loadModes[0] === 'auto';
       const item = id ? {type: 'video', key: 'video:' + id, id, title: source.textContent.trim() || 'YouTube video'}
         : image ? {type: 'image', key: 'image:' + image, url: image, title: source.textContent.trim() || 'Project screenshot'}
-        : demo ? {type: 'demo', key: 'demo:' + demo, url: demo, title: source.textContent.trim() || 'Interactive emulator'}
+        : demo ? {type: 'demo', key: 'demo:' + (autoLoad ? 'auto:' : '') + demo, url: demo, autoLoad,
+          title: source.textContent.trim() || (autoLoad ? 'Interactive demo' : 'Interactive emulator')}
         : knownPdf(value, entries, body.ownerDocument.baseURI);
-      if (item && !media.has(item.key)) media.set(item.key, {...item, anchor: link});
+      if (!item) continue;
+      // One frame per canonical demo URL, including mixed manual/auto links.
+      // Any explicit auto link opts it in; keep the first mention's placement.
+      const key = item.type === 'demo' ? 'demo:' + item.url : item.key;
+      const existing = media.get(key);
+      if (!existing) media.set(key, {...item, anchor: link});
+      else if (item.type === 'demo' && item.autoLoad && !existing.autoLoad) {
+        media.set(key, {...existing, autoLoad: true, key: item.key});
+      }
     }
     return [...media.values()];
   }
@@ -161,16 +173,18 @@
 
   function createDemo(doc, block, item) {
     block.className = 'evidence-demo';block.dataset.state = 'idle';
+    const autoLoad = item.autoLoad === true;
+    block.dataset.loadMode = autoLoad ? 'auto' : 'manual';
     const view = doc.defaultView, stage = doc.createElement('div'), controls = doc.createElement('div');
     const load = doc.createElement('button'), unload = doc.createElement('button'), fullscreen = doc.createElement('button');
     const open = doc.createElement('a'), status = doc.createElement('p'), caption = doc.createElement('figcaption');
     stage.className = 'evidence-demo-stage';controls.className = 'evidence-demo-controls';
     for (const button of [load, unload, fullscreen]) button.type = 'button';
     load.textContent = 'Load emulator';unload.textContent = 'Unload';fullscreen.textContent = 'Fullscreen';
-    unload.hidden = true;fullscreen.hidden = true;
-    open.textContent = 'Open emulator';open.href = item.url;open.target = '_blank';open.rel = 'noopener noreferrer';
+    load.hidden = autoLoad;unload.hidden = true;fullscreen.hidden = true;
+    open.textContent = autoLoad ? 'Open demo' : 'Open emulator';open.href = item.url;open.target = '_blank';open.rel = 'noopener noreferrer';
     status.className = 'evidence-demo-status';status.setAttribute('role', 'status');
-    status.textContent = 'Loads only when you choose to open it.';caption.textContent = item.title;
+    status.textContent = autoLoad ? 'Loading demo…' : 'Loads only when you choose to open it.';caption.textContent = item.title;
     controls.append(load, unload, fullscreen, open);block.append(stage, controls, status, caption);
     block.addEventListener('fullscreenchange', () => {
       fullscreen.textContent = doc.fullscreenElement === block ? 'Exit fullscreen' : 'Fullscreen';
@@ -178,7 +192,7 @@
     function stop() {
       if (doc.fullscreenElement === block) doc.exitFullscreen().catch(() => {});
       demoCleanup.get(block)?.();demoCleanup.delete(block);stage.replaceChildren();
-      unload.hidden = true;fullscreen.hidden = true;load.hidden = false;load.disabled = false;
+      unload.hidden = true;fullscreen.hidden = true;load.hidden = autoLoad;load.disabled = false;
     }
     unload.addEventListener('click', () => {
       stop();block.dataset.state = 'idle';load.textContent = 'Load emulator';
@@ -189,24 +203,27 @@
         if (doc.fullscreenElement === block) await doc.exitFullscreen();
         else await block.requestFullscreen();
       }
-      catch { status.textContent = 'Fullscreen is unavailable. Use Open emulator for a separate tab.'; }
+      catch {
+        status.hidden = false;
+        status.textContent = 'Fullscreen is unavailable. Use ' + (autoLoad ? 'Open demo' : 'Open emulator') + ' for a separate tab.';
+      }
     });
-    load.addEventListener('click', () => {
+    function start() {
       stop();block.dataset.state = 'loading';load.disabled = true;load.textContent = 'Loading…';
-      unload.hidden = false;status.textContent = 'Loading emulator…';
+      unload.hidden = autoLoad;status.hidden = false;status.textContent = autoLoad ? 'Loading demo…' : 'Loading emulator…';
       const frame = doc.createElement('iframe');
       frame.title = caption.textContent;frame.setAttribute('sandbox', 'allow-scripts');
       frame.referrerPolicy = 'no-referrer';frame.allow = 'fullscreen';frame.allowFullscreen = true;
       let timer;
       const fail = () => {
-        stop();block.dataset.state = 'error';load.textContent = 'Retry';
-        status.textContent = 'Emulator could not load. Retry or open it in a separate tab.';
+        stop();block.dataset.state = 'error';load.hidden = false;load.textContent = 'Retry';status.hidden = false;
+        status.textContent = (autoLoad ? 'Demo' : 'Emulator') + ' could not load. Retry or open it in a separate tab.';
       };
       const receive = event => {
         if (event.source !== frame.contentWindow) return;
         if (event.data?.type === 'blog-demo-ready') {
           view.clearTimeout(timer);block.dataset.state = 'ready';load.hidden = true;fullscreen.hidden = false;
-          status.textContent = 'Emulator ready.';
+          status.hidden = autoLoad;status.textContent = autoLoad ? '' : 'Emulator ready.';
         } else if (event.data?.type === 'blog-demo-error') fail();
       };
       view.addEventListener('message', receive);frame.addEventListener('error', fail);
@@ -214,9 +231,11 @@
       demoCleanup.set(block, () => {
         view.clearTimeout(timer);view.removeEventListener('message', receive);frame.removeEventListener('error', fail);
       });
-      // The entry document and all of its scripts start loading only here.
+      // Use the validated canonical URL; load=auto only controls this wrapper.
       frame.src = item.url;stage.append(frame);
-    });
+    }
+    load.addEventListener('click', start);
+    if (autoLoad) demoStart.set(block, start);
   }
 
   function createMedia(doc, item) {
@@ -450,7 +469,7 @@
     // Preserve live frames across editor redraws and text edits. Neither the
     // editable HTML nor the serialized document gains media nodes.
     available.filter(block => !blocks.includes(block)).forEach(block => {
-      demoCleanup.get(block)?.();demoCleanup.delete(block);block.remove();
+      demoCleanup.get(block)?.();demoCleanup.delete(block);demoStart.delete(block);block.remove();
     });
     blocks.forEach((block, index) => {
       if (pane.children[index] === block) return;
@@ -459,6 +478,12 @@
       // Atomic moves retain playback as first-mention order changes.
       if (block.parentElement === pane && typeof pane.moveBefore === 'function') pane.moveBefore(block, next);
       else pane.insertBefore(block, next);
+    });
+    // Start opted-in demos once their block is attached. Reused blocks retain
+    // their existing iframe and simulation state through ordinary text edits.
+    blocks.forEach(block => {
+      const start = demoStart.get(block);
+      if (start) { demoStart.delete(block);start(); }
     });
     pane.hidden = !blocks.length;
     watchPaneLayout(body, pane);
