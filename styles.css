@@ -17,7 +17,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .reading-column { max-width: 660px; }
 .reading-column:has(.post-media:not([hidden])) { max-width: 1500px; }
 .post-copy { min-width: 0; max-width: 660px; }
-.post:has(> .post-media:not([hidden])) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.12fr); gap: clamp(28px,3vw,48px); align-items: start; }
+.post:has(> .post-media:not([hidden])) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.12fr); gap: clamp(56px,6vw,96px); align-items: start; }
 .post-media { display: flex; flex-direction: column; min-width: 0; }
 .post-media > [data-media-key] { margin-top: var(--media-offset, 0px); }
 .media-mention-marker { display: inline-block; width: 0; height: 0; }
