@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neural cellular automaton</title>
+  <link rel="stylesheet" href="./demo.css">
+  <script src="./demo.js" defer></script>
+</head>
+<body>
+  <main id="joy-checkpoint-demo" aria-label="Interactive neural cellular automaton">
+    <div class="views">
+      <section class="simulation" aria-label="Live model state">
+        <canvas data-simulation width="72" height="72" role="img" aria-label="Neural cellular automaton. Drag to erase cells. Double-click to add a living seed.">Interactive neural cellular automaton.</canvas>
+      </section>
+      <aside class="target">
+        <canvas data-target width="72" height="72" role="img" aria-label="Laughing with tears emoji target">Laughing with tears emoji target.</canvas>
+        <button type="button" data-reset>Reset</button>
+      </aside>
+    </div>
+    <div class="sr-only" aria-live="polite" data-announcement></div>
+    <div class="sr-only" role="alert" data-failure hidden></div>
+  </main>
+</body>
+</html>

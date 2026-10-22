@@ -1,0 +1,18 @@
+{
+  "emoji": "😂",
+  "unicode": "U+1F602",
+  "name": "Face with tears of joy",
+  "credit": "Google Noto Emoji",
+  "source_revision": "e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e",
+  "source_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/2D/png/128/emoji_u1f602.png",
+  "license_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/LICENSE",
+  "readme_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/e20cbc2bbec1926686be9f9bee7d1d2cfa1fea0e/README.md",
+  "downloaded_utc": "2026-10-17T17:05:52.467332+00:00",
+  "sha256": "15952ae860a14f39726198bc3d0ed948730d8fdde5afaee488140b0f76ee566b",
+  "provenance_source": "Existing demo.js target-artwork provenance comment, preserved without changing its source identity or acquisition time.",
+  "distribution_notices": {
+    "LICENSE-APACHE-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "LICENSE-NOTO-UPSTREAM.txt": "500bb1ccf43df7bbb522112f9133a52b16e1c35e809632f5d8609b179152de5b",
+    "README-NOTO-UPSTREAM.md": "1ae0343308fe8c7e6e679cd12688df7586aa87df286be19d8bb2969b8abcac64"
+  }
+}

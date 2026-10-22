@@ -1,0 +1,13 @@
+:root { color-scheme: light; background: #fff; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; }
+main { width: 100%; max-width: 660px; margin: 0 auto; }
+.views { display: grid; grid-template-columns: minmax(0, 1fr) clamp(48px, 14vw, 80px); align-items: start; gap: 12px; }
+.simulation { min-width: 0; }
+canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+[data-simulation] { touch-action: none; cursor: crosshair; user-select: none; }
+[data-reset] { display: block; width: 100%; margin-top: 12px; padding: 6px 2px; border: 1px solid #b9c3c6; background: #fff; color: #315c69; font: 13px system-ui, sans-serif; cursor: pointer; }
+[data-reset]:hover { background: #f4f7f8; }
+[data-reset]:focus-visible { outline: 2px solid #315c69; outline-offset: 2px; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
