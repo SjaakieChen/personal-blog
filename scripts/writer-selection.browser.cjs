@@ -152,6 +152,45 @@ const server=http.createServer(async(req,res)=>{
     }
     console.log('PASS: reference and note dialogs retain focused input and unfinished text during metadata sync.');
 
+    // Notes number themselves by their first mention, including an insertion
+    // before older notes. Narrow columns must not split *** or **** into rows.
+    const assertNotes=async count=>{
+      const state=await page.evaluate(()=>({
+        markers:[...document.querySelectorAll('#body [data-note] a')].map(a=>({text:a.textContent,href:a.getAttribute('href')})),
+        footer:[...document.querySelectorAll('#note-preview li')].map(li=>{
+          const symbol=li.querySelector('.note-symbol'),range=document.createRange();
+          const lines=[...symbol.textContent].map((_,i)=>{range.setStart(symbol.firstChild,i);range.setEnd(symbol.firstChild,i+1);return range.getBoundingClientRect().top;});
+          return {text:symbol.textContent,id:li.id,lines};
+        })
+      }));
+      const expected=Array.from({length:count},(_,i)=>'*'.repeat(i+1));
+      assert.deepEqual(state.markers.map(n=>n.text),expected,'inline asterisks follow the current mention order');
+      assert.deepEqual(state.footer.map(n=>n.text),expected,'footer symbols match the inline asterisks');
+      assert.deepEqual(state.markers.map(n=>n.href),state.footer.map(n=>'#'+n.id),'each marker points to its matching explanation');
+      state.footer.forEach(n=>assert.equal(new Set(n.lines).size,1,'all asterisks stay on one line: '+n.text));
+    };
+    for(let i=1;i<=4;i++){
+      await page.locator('#body').evaluate((body,atStart)=>{
+        body.focus();const range=document.createRange();range.selectNodeContents(body);range.collapse(atStart);
+        const selection=getSelection();selection.removeAllRanges();selection.addRange(range);
+      },i===4);
+      await page.locator('#add-note').click();
+      await page.locator('#note-text').fill('Explanation '+i+': A longer note should wrap normally without squeezing its asterisks into separate lines.');
+      await page.locator('#note-form button[type=submit]').click();await green();
+    }
+    await assertNotes(4);
+    const originalViewport=page.viewportSize();
+    await page.setViewportSize({width:390,height:844});await assertNotes(4);
+    await page.locator('#note-preview li').nth(1).getByRole('button',{name:'Edit note',exact:true}).click();
+    await page.locator('#note-remove').click();await green();await assertNotes(3);
+    await page.locator('#body').evaluate(body=>{
+      const markers=body.querySelectorAll('[data-note]');body.prepend(markers[markers.length-1]);
+      body.dispatchEvent(new Event('input',{bubbles:true}));
+    });await green();await assertNotes(3);
+    await page.reload();await green();await assertNotes(3);
+    await page.setViewportSize(originalViewport);
+    console.log('PASS: note asterisks renumber after insertion, deletion, reordering and reload; long markers stay on one line at narrow widths.');
+
     // A surviving DOM path can now identify different text after a remote
     // formatting edit. Restore by logical text position when structure changes.
     await remoteDoc([{runs:[{text:'Alpha '},{text:'bold',bold:true},{text:' tail'}]}]);

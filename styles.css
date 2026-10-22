@@ -66,7 +66,8 @@ h1,h2 { margin: 0; color: var(--blue); font-size: 40px; font-weight: 650; line-h
 .explanation-notes ul { padding: 0; margin: 0; list-style: none; }
 .explanation-notes li { display: flex; gap: 12px; margin-bottom: 14px; scroll-margin-top: 30px; }
 .explanation-notes li:target { background: #edf4f9; }
-.note-symbol { color: var(--blue); min-width: 1em; }
+.note-symbol { color: var(--blue); min-width: 1em; flex: 0 0 auto; white-space: nowrap; }
+.explanation-marker { white-space: nowrap; }
 .note-text { min-width: 0; }
 .quote-source { margin-top: 5px; padding-left: 18px; }
 .post-body q::before, .post-body q::after { content: none; }
