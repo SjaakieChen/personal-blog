@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Project: shadow CT scanner"
+title: "The making of a \"shadow\" CT scanner"
 quote: ""
 render_with_liquid: false
 reference_key: "a0260f48-c86d-4684-914d-60ac6fc3f53f"
@@ -8,13 +8,12 @@ references: [{"id":"ct-how-it-works","title":"Computed Tomography (CT)","author"
 quote_reference: ""
 quote_locator: ""
 notes: []
-permalink: "/evidence/ct-scanner/"
 date: "2026-10-21T16:38:59+02:00"
+permalink: "/evidence/ct-scanner/"
 previous_paths: ["pages/ct-scanner-evidence.md"]
-previous_source_sha: "7b69bdb7ed17d119afdd8c0df1c76a2be062bfec"
 ---
 
-<p>So, in my first year at Imperial we had to do a summer project. What that entails is, in the last term of the year, after the exams have finished. The students are asked to investigate or make anything that leads to a fun demo. What we thought would be cool was, to see if we could make an item scanner. I thought this was an especially good idea. Back then and still now it seems to me obvious, that we need a good way of scanning physical objects into the digital. Make the manipulations happen there, that makes everything cheaper and allows us to use the infrastructure of the past 3 decades like cad, blender or ai to help iterate.</p>
+<p>In my first year at Imperial, we had to do a summer project. What that entails is, in the last term of the year, after the exams have finished. The students are asked to investigate or make anything that leads to a fun demo. What we thought would be cool was, to see if we could make an item scanner. I thought this was an especially good idea. Back then and still now it seems to me obvious, that we need a good way of scanning physical objects into the digital. Make the manipulations happen there, that makes everything cheaper and allows us to use the infrastructure of the past 3 decades like cad, blender or ai to help iterate.</p>
 <p>Given the budget was only £200 we came up with some quite ingenious techniques. They do say that; constraints are the mother of invention. I will list some of my favorites here:</p>
 <p>What we need are many pictures at angles of the object, a commercial CT scanner in the hospital is rotating an x-ray emitter around you at lightning speed capturing you many times a second.<sup class="citation" contenteditable="false" data-reference="ct-how-it-works" data-locator="How does CT work?"><a href="#ref-a0260f48-c86d-4684-914d-60ac6fc3f53f-1" aria-label="Reference 1, How does CT work?" title="How does CT work?">[1]</a></sup> Since we have the constraint of money, which discards the opportunity for rotating anything around an object. That can offset that by a constraint we don&#39;t have; our object is not alive! So, let&#39;s spin the object instead producing equivalent results. (See the Arduino and stepper motor platform)<sup class="citation" contenteditable="false" data-reference="ct-group-poster" data-locator="p. 1, Data Collection, Fig. 3"><a href="#ref-a0260f48-c86d-4684-914d-60ac6fc3f53f-2" aria-label="Reference 2, p. 1, Data Collection, Fig. 3" title="p. 1, Data Collection, Fig. 3">[2]</a></sup></p>
 <p>We were not allowed to use x-rays like the hospitals do, so we bought a cheap camera and light. Repurposing a portrait as our detector screen for shadows instead of x-ray detectors. What we quickly realised was that, within price range, nothing could take pictures at a reasonable frequency while the platform was rotating. We are missing angles! Our solution: using existing infrastructure, the iPhone, we realized that by taking a <strong>video</strong> and syncing the to stepper motor rotation to framerate works way better.<sup class="citation" contenteditable="false" data-reference="ct-group-poster" data-locator="p. 1, Data Collection and Technical Details"><a href="#ref-a0260f48-c86d-4684-914d-60ac6fc3f53f-2" aria-label="Reference 2, p. 1, Data Collection and Technical Details" title="p. 1, Data Collection and Technical Details">[2]</a></sup> All of our problems could be solved including issue of storing data. Creating a connection between my phone and my laptop we could within 10 seconds, fully reconstruct any object send over in video format from my phone.</p>
