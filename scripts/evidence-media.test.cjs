@@ -59,6 +59,8 @@ test('media fragments wait for generated targets and reveal a hidden carousel pa
 test('interactive demos accept only same-site evidence entry documents', () => {
   const base = 'https://private.example:8446/write/', entry = '/assets/evidence/drafts/demos/imec-alignment/index.html';
   assert.equal(demoURL(entry, base), 'https://private.example:8446' + entry);
+  assert.equal(demoURL('https://sjaakiechen.github.io/personal-blog/assets/evidence/demos/joy-checkpoint-5850-live/index.html?load=auto', base), 'https://private.example:8446/assets/evidence/demos/joy-checkpoint-5850-live/index.html');
+  assert.equal(demoURL('https://sjaakiechen.github.io/personal-blog/assets/evidence/drafts/demos/private/index.html', base), null);
   assert.equal(demoURL(entry + '?v=1#view', base), 'https://private.example:8446' + entry);
   assert.equal(demoURL('/personal-blog/assets/evidence/demos/imec-alignment/index.html', 'https://public.example/personal-blog/posts/one/', 'https://public.example/personal-blog/'), 'https://public.example/personal-blog/assets/evidence/demos/imec-alignment/index.html');
   assert.equal(demoURL(entry, 'http://127.0.0.1:8787/write/'), 'http://127.0.0.1:8787' + entry);

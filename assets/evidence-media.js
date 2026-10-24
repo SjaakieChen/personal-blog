@@ -12,8 +12,17 @@
   function demoURL(value, base, assetBase) {
     if (typeof value !== 'string' || /[\\\s<>]/.test(value)) return null;
     try {
-      const current = new URL(base), url = new URL(value, current);
+      const current = new URL(base);
+      let url = new URL(value, current);
       const assets = new URL('assets/evidence/', assetBase || new URL('/', current));
+      const publicAssets = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/';
+      if (url.href.startsWith(publicAssets) && !url.username && !url.password) {
+        const relative = url.pathname.slice(new URL(publicAssets).pathname.length);
+        if (!/^demos\/[A-Za-z0-9_-]+\/index\.html$/.test(relative)) return null;
+        // Preview the same deployed bundle through the private desk's local
+        // asset copy, preserving the public link and the same-origin sandbox.
+        url = new URL(relative, assets);
+      }
       const localHTTP = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
       if ((url.protocol !== 'https:' && !localHTTP) || url.origin !== current.origin
           || assets.origin !== current.origin || url.username || url.password || !url.pathname.startsWith(assets.pathname)) return null;

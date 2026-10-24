@@ -635,6 +635,11 @@ class Handler(BaseHTTPRequestHandler):
                 if file is None:
                     return self.send(404, {'error': 'Not found.'})
                 return self.send(200, file.read_bytes(), DEMO_TYPES[file.name], demo=True)
+            if re.fullmatch(r'/assets/evidence/demos/[A-Za-z0-9_-]+/(index\.html|demo\.js|demo\.css)', path):
+                file = (ROOT/path.lstrip('/')).resolve()
+                if ROOT.resolve() not in file.parents or not file.is_file():
+                    return self.send(404, {'error': 'Not found.'})
+                return self.send(200, file.read_bytes(), DEMO_TYPES[file.name], demo=True)
             if path.startswith(PRIVATE_MEDIA_PREFIX):
                 file = private_media_file(path)
                 if file is None:
