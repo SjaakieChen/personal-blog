@@ -9,6 +9,7 @@ permalink: /write/
 <link rel="stylesheet" href="{{ '/assets/writer.css' | relative_url }}?v={{ site.time | date: '%s' }}">
 <script src="{{ '/assets/writer-core.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/writer-sync.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
+<script src="{{ '/assets/writer-changes.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/links.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/evidence-media.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 <script src="{{ '/assets/writer.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script></head>
@@ -44,6 +45,11 @@ permalink: /write/
 </div>
 <div class="reading-column">
 <p id="published-version" class="editor-status" hidden>Published version</p>
+<details id="edit-changes" class="edit-changes" hidden>
+<summary>Changes from published</summary>
+<p class="change-key"><ins>Added</ins> · <del>Removed</del> · Compared with the latest loaded published version.</p>
+<div id="edit-change-list"></div>
+</details>
 <article class="post" aria-label="Editable post preview">
 <div class="post-copy">
 <h1 id="title" contenteditable="plaintext-only" role="textbox" aria-label="Post title" data-placeholder="Title" spellcheck="true"></h1>

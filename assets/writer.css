@@ -17,6 +17,18 @@ button,.button,select { border: 1px solid #a4b3be; border-radius: 0; padding: 7p
 [contenteditable]:focus-visible { outline: 1px dashed #9cb5c9; outline-offset: 7px; }
 [contenteditable][data-empty="true"]::before { content: attr(data-placeholder); color: #8497a5; pointer-events: none; }
 .editor-status { margin-top: 30px; color: #64737d; font: 12px/1.6 system-ui,sans-serif; }
+::highlight(writing-added) { background-color: #f5edd3; }
+.edit-changes { margin: -12px 0 24px; color: #64737d; font: 12px/1.6 system-ui,sans-serif; }
+.edit-changes summary { cursor: pointer; width: fit-content; }
+.edit-changes[open] { border-bottom: 1px solid #e4e6e5; padding-bottom: 16px; }
+.edit-changes h3 { margin: 18px 0 5px; font: 600 12px/1.6 system-ui,sans-serif; letter-spacing: normal; }
+.edit-changes p { margin: 8px 0; }
+#edit-change-list { max-height: 38svh; overflow: auto; overscroll-behavior: contain; }
+.edit-changes ins { background: #f5edd3; color: #534d39; text-decoration: underline; text-decoration-color: #b7a56c; text-underline-offset: 3px; }
+.edit-changes del { background: #f6e8e4; color: #916c64; }
+.change-text { white-space: pre-wrap; overflow-wrap: anywhere; color: #42515b; }
+.edit-changes .change-version { margin-bottom: 0; font-size: 11px; color: #64737d; }
+.change-format-preview { padding-left: 12px; border-left: 1px solid #dce1e4; overflow-wrap: anywhere; color: #42515b; }
 .publish-panel { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px 12px; max-height: min(30svh,260px); overflow: auto; overscroll-behavior: contain; padding: 12px 0; border-top: 1px solid #dce1e4; font: 13px/1.5 system-ui,sans-serif; overflow-wrap: anywhere; }
 .publish-panel h2 { font: 600 14px/1.4 system-ui,sans-serif; letter-spacing: normal; }
 .publish-panel p { margin: 0; }

@@ -425,7 +425,16 @@
     return changed;
   }
   const newestFirst=field=>(a,b)=>(Date.parse(b[field] || b.date) || 0)-(Date.parse(a[field] || a.date) || 0) || String(a.path || a.id).localeCompare(String(b.path || b.id));
+  let changesTimer;
+  function scheduleChanges() {
+    clearTimeout(changesTimer);
+    changesTimer=setTimeout(()=>{
+      const d=current(),entry=!publishedPreview && published.find(p=>p.path===d?.sourcePath);
+      window.BlogWritingChanges?.update(entry?d:null,entry?entryDraft(entry):null);
+    },120);
+  }
   function renderNav() {
+    scheduleChanges();
     const nav=$('writing-nav'),sidebar=document.querySelector('.sidebar'),scroll=sidebar.scrollTop; nav.replaceChildren();
     let section='';
     const selected=publishedPreview?'published:'+publishedPreview.sourcePath:writingState(current())==='published'?'published:'+current().sourcePath:active;

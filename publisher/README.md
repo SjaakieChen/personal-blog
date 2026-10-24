@@ -12,6 +12,8 @@ The public writer's Publish button transfers drafts into the private desk throug
 
 ## Operations
 
+Existing writing shows faint highlights on added/replaced text, with a collapsed “Changes from published” comparison for removals, formatting, references and notes. The baseline is the latest loaded published index. Highlights use browser paint ranges without adding markup to the editable text or saved drafts; browsers without range highlighting still show the comparison. `node scripts/writer-changes.browser.cjs` checks comparison, typing/Undo and mobile layout with local fixtures.
+
 - Source deployment: `/home/jiaqi/.local/share/blog-publisher`.
 - Private state: `/home/jiaqi/.local/state/blog-publisher`, directory mode 0700. GitHub CLI's dedicated config is below `github/`; files are created with umask 0077. This is outside YogaCloud and source control.
 - Service: `blog-publisher.service`, system unit running as jiaqi, enabled at boot and restarted on failure.
