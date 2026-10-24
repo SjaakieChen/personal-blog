@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Working at a serious company - Imec"
+title: "Interning at a chip company - Imec"
 quote: ""
 render_with_liquid: false
 reference_key: "cfc3949e-d1ac-4c52-991e-234b0105a090"
@@ -8,10 +8,9 @@ references: [{"id":"imec-cmst-group","title":"CMST — imec research group at Gh
 quote_reference: ""
 quote_locator: ""
 notes: [{"id":"3e9c078a-050a-4665-923b-ecb2f58fffd1","text":"And by really accurate I mean features spaced just 20 nm apart. To put that into perspective 20nm to us, is about the same size as us to Jupiter.\n\nFYI the 3nm node commonly mentioned by the media is just a marketing term that doesn't correspond to dimension on the chip","citations":[{"reference":"asml-imec-high-na-20nm-2024","locator":"First exposure results: 10 nm dense lines at 20 nm pitch"},{"reference":"nasa-jupiter-equatorial-diameter","locator":"Jupiter; linear-scale comparison assumes a 1.7 m person"},{"reference":"intel-process-node-naming-2025","locator":"Intel Process Technology Naming"}]},{"id":"imec-component-cost-context","text":"The $250 laser price is from my project. For the chip as a rough benchmark, LIGENTEC estimates a chip of similar proportions to be CHF1300.","reference":"imec-chip-cost-benchmark","locator":"LIGENTEC, MPW-AN800 row"}]
+date: "2026-10-22T19:57:37+01:00"
 permalink: "/evidence/imec-internship/"
-date: "2026-10-22T20:57:37+02:00"
 previous_paths: ["pages/imec-internship-evidence.md"]
-previous_source_sha: "8a770fd701b97953926f7966c5aec349fa89db3d"
 ---
 
 <p> In the summer of 2026, I spend 3 months working at Imec in the <strong>CMST</strong><sup class="citation" contenteditable="false" data-reference="imec-cmst-group" data-locator=""><a href="#ref-cfc3949e-d1ac-4c52-991e-234b0105a090-1" aria-label="Reference 1" title="">[1]</a></sup><strong> </strong>group. The project that they were working on was active alignment of ball lenses. To put it into context a little bit first.</p>
