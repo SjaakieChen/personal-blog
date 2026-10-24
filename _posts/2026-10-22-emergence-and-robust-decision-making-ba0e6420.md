@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Emergence and robust decision making"
+title: "Emergence and robustness"
 quote: "\"A game so simple he called it Life\""
 render_with_liquid: false
 reference_key: "ba0e6420-8ec0-44b5-8d92-d649a70bad96"
