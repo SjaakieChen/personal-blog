@@ -36,6 +36,13 @@
   const syncTimeout=45000;
   try{cloudBase=JSON.parse(localStorage.getItem(cloudBaseKey)) || cloudBase;}catch{}
   const draftSnapshot=()=>({drafts,deleted:[...deletedDrafts]});
+  function paintPublicRefresh(state) {
+    if(isPrivate)return;
+    const button=$('connect-github');
+    button.dataset.connected=String(state==='ready');button.dataset.syncing=String(state==='loading');
+    const label=state==='loading'?'Refreshing published posts…':state==='ready'?'Published posts refreshed. Drafts stay in this browser. Click to refresh again.':state==='save-error'?'Local saving failed. Use Save JSON, then click to retry.':'Published posts could not refresh. Click to retry. Drafts stay in this browser.';
+    button.title=label;button.setAttribute('aria-label',label);
+  }
   function paintSync() {
     const button=$('connect-github');
     if(!isPrivate)return;
@@ -61,7 +68,7 @@
     else if(!githubHealthy || cloudSynced!==JSON.stringify(draftSnapshot()))queueSync(800);
   }
   async function syncDesk() {
-    if(!isPrivate){if(await save())await refreshIndex();return;}
+    if(!isPrivate){if(await save())await refreshIndex();else paintPublicRefresh('save-error');return;}
     if(syncing){syncAgain=true;return;}
     clearTimeout(syncTimer);syncTimer=null;
     if(!navigator.onLine){paintSync();return;}
@@ -836,6 +843,7 @@
   function refreshIndex(){
     if(indexFlight?.request===indexRequest)return indexFlight.promise;
     const request=++indexRequest;
+    paintPublicRefresh('loading');
     const promise=api(document.body.dataset.index,undefined,syncTimeout).then(async data=>{
     if(request!==indexRequest)return refreshIndex();
     if(!sync.validPublishedIndex(data,isPrivate))throw new Error('Incomplete published index.');
@@ -862,10 +870,10 @@
       else if(!publishedPreview || publishedPreview.sourceSha!==entry.sourceSha){const view=captureWriterView();openPublished(entry);restoreWriterView(view);}
     }
     if((cleanup || reconciled) && !await save())throw new Error('Could not save reconciled drafts.');
-    $('index-status').textContent='';return true;
+    $('index-status').textContent='';paintPublicRefresh('ready');return true;
   }).catch(()=>{
     if(request!==indexRequest)return refreshIndex();
-    $('index-status').textContent='Published posts could not load. Your saved drafts are still available.';return false;
+    $('index-status').textContent='Published posts could not load. Your saved drafts are still available.';paintPublicRefresh('error');return false;
   }).finally(()=>{if(indexFlight?.request===request)indexFlight=null;});
     indexFlight={request,promise};return promise;
   }
