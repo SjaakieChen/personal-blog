@@ -156,6 +156,17 @@ if (typeof document !== 'undefined') (function () {
       birth = [3]; survival = [2, 3];
       running = true; accumulator = 0; lastTime = 0; showRules(); draw();
     });
+    canvas.addEventListener('click', event => {
+      const rectangle = canvas.getBoundingClientRect();
+      const {unit, left, top} = geometry;
+      const x = Math.floor((event.clientX - rectangle.left - left) / unit);
+      const y = Math.floor((event.clientY - rectangle.top - top) / unit);
+      if (x < 0 || x >= columns || y < 0 || y >= rows) return;
+      const cell = L.key(x, y);
+      if (cells.has(cell)) cells.delete(cell); else cells.add(cell);
+      originalSetup = false; received = 0; disturbed = false;
+      showRules(); draw();
+    });
     document.addEventListener('visibilitychange', () => { lastTime = 0; accumulator = 0; });
     function frame(time) {
       if (running && !document.hidden) {
@@ -171,7 +182,7 @@ if (typeof document !== 'undefined') (function () {
     new ResizeObserver(resize).observe(canvas);
     window.LifeDemo = {snapshot: () => ({generation, population: background ? null : cells.size, background, received, running, originalSetup, rule: ruleName(), birth: [...birth], survival: [...survival], cells: [...cells]})};
     showRules(); resize(); requestAnimationFrame(frame);
-    parent.postMessage({type: 'blog-demo-ready'}, '*');
+    parent.postMessage({type: 'blog-demo-ready', caption: 'Interactive demo (Game of life but with different rules)'}, '*');
   } catch (error) {
     parent.postMessage({type: 'blog-demo-error', message: error.message || 'Simulation initialization failed.'}, '*');
   }
