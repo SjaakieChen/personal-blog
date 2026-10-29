@@ -73,6 +73,12 @@ if (typeof document !== 'undefined') (function () {
     let running = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     let originalSetup = true, lastTime = 0, accumulator = 0;
     let geometry = {unit: 1, left: 0, top: 0, width: 1, height: 1};
+    const glider = [[0, -1], [1, 0], [-1, 1], [0, 1], [1, 1]];
+    function setRunning(next) {
+      running = next; accumulator = 0; lastTime = 0;
+      $('toggle-running').textContent = running ? 'Pause' : 'Resume';
+      $('toggle-running').setAttribute('aria-label', running ? 'Pause simulation' : 'Resume simulation');
+    }
     const signature = set => [...set].sort().join(';');
     const receiverSignature = signature(receiver);
     function receiverRegion() {
@@ -147,14 +153,15 @@ if (typeof document !== 'undefined') (function () {
         const next = selected.includes(count) ? selected.filter(value => value !== count) : [...selected, count].sort((a, b) => a - b);
         if (kind === 'birth') birth = next; else survival = next;
         originalSetup = false; received = 0; disturbed = false;
-        running = true; accumulator = 0; lastTime = 0; showRules(); draw();
+        accumulator = 0; lastTime = 0; showRules(); draw();
       });
       $(kind + '-choices').append(button);
     }
+    $('toggle-running').addEventListener('click', () => setRunning(!running));
     $('reset').addEventListener('click', () => {
       cells = startingCells(); background = false; generation = startGeneration; received = 0; disturbed = false; originalSetup = true;
       birth = [3]; survival = [2, 3];
-      running = true; accumulator = 0; lastTime = 0; showRules(); draw();
+      setRunning(true); showRules(); draw();
     });
     canvas.addEventListener('click', event => {
       const rectangle = canvas.getBoundingClientRect();
@@ -162,8 +169,16 @@ if (typeof document !== 'undefined') (function () {
       const x = Math.floor((event.clientX - rectangle.left - left) / unit);
       const y = Math.floor((event.clientY - rectangle.top - top) / unit);
       if (x < 0 || x >= columns || y < 0 || y >= rows) return;
-      const cell = L.key(x, y);
-      if (cells.has(cell)) cells.delete(cell); else cells.add(cell);
+      // Keep the complete glider on the board, including clicks at its edges.
+      const anchorX = Math.max(1, Math.min(columns - 2, x));
+      const anchorY = Math.max(1, Math.min(rows - 2, y));
+      const pattern = glider.map(([dx, dy]) => [anchorX + dx, anchorY + dy]);
+      const alive = !pattern.every(([px, py]) => L.isAlive({cells, background}, px, py));
+      for (const [px, py] of pattern) {
+        const cell = L.key(px, py);
+        if (alive !== background) cells.add(cell); else cells.delete(cell);
+      }
+      setRunning(false);
       originalSetup = false; received = 0; disturbed = false;
       showRules(); draw();
     });
@@ -181,7 +196,7 @@ if (typeof document !== 'undefined') (function () {
     }
     new ResizeObserver(resize).observe(canvas);
     window.LifeDemo = {snapshot: () => ({generation, population: background ? null : cells.size, background, received, running, originalSetup, rule: ruleName(), birth: [...birth], survival: [...survival], cells: [...cells]})};
-    showRules(); resize(); requestAnimationFrame(frame);
+    setRunning(running); showRules(); resize(); requestAnimationFrame(frame);
     parent.postMessage({type: 'blog-demo-ready', caption: 'Interactive demo (Game of life but with different rules)'}, '*');
   } catch (error) {
     parent.postMessage({type: 'blog-demo-error', message: error.message || 'Simulation initialization failed.'}, '*');
