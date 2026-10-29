@@ -15,6 +15,11 @@ canvas { cursor: crosshair; display: block; position: absolute; inset: 0; width:
 .rules summary { cursor: pointer; width: fit-content; line-height: 1.5; }
 .rules output { font-variant-numeric: tabular-nums; }
 .rule-row { display: grid; grid-template-columns: 53px 1fr; align-items: center; gap: 6px; margin-top: 7px; }
+.rule-label-wrap { position: relative; }
+.rule-label { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.rule-label:focus-visible { outline: 2px solid #315c49; outline-offset: 3px; }
+.rule-help { display: none; position: absolute; z-index: 2; left: 0; bottom: calc(100% + 8px); width: min(280px, calc(100vw - 36px)); padding: 10px 12px; border-radius: 5px; background: #283334; color: #fffefa; font-size: 12px; line-height: 1.5; box-shadow: 0 3px 12px #0002; pointer-events: none; }
+.rule-label-wrap:hover .rule-help, .rule-label-wrap:focus-within .rule-help { display: block; }
 .rule-choices { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
 .rule-choice { padding: 6px 0; min-width: 0; font-size: 11px; line-height: 1; min-height: 25px; border-radius: 4px; }
 .rule-choice[aria-pressed="true"] { background: #315c49; border-color: #315c49; color: #fff; }

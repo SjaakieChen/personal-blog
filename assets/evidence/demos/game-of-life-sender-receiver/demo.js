@@ -147,7 +147,11 @@ if (typeof document !== 'undefined') (function () {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'rule-choice'; button.textContent = count;
       button.dataset.rule = kind; button.dataset.neighbors = count;
-      button.setAttribute('aria-label', (kind === 'birth' ? 'Birth' : 'Survival') + ' with ' + count + ' live neighbours');
+      const neighborCount = count + ' live neighbour' + (count === 1 ? '' : 's');
+      button.setAttribute('aria-label', (kind === 'birth' ? 'Birth' : 'Survival') + ' with ' + neighborCount);
+      button.title = kind === 'birth'
+        ? 'A dead cell becomes alive with exactly ' + neighborCount + ' among the eight surrounding cells, including diagonals.'
+        : 'A live cell survives with exactly ' + neighborCount + ' among the eight surrounding cells, including diagonals.';
       button.addEventListener('click', () => {
         const selected = kind === 'birth' ? birth : survival;
         const next = selected.includes(count) ? selected.filter(value => value !== count) : [...selected, count].sort((a, b) => a - b);
