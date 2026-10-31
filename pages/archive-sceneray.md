@@ -11,4 +11,6 @@ notes: []
 permalink: "/archive/sceneray/"
 ---
 
-<p>This company works on deep brain stimulation. I wanted to get a chance to learn about the brain and therefore interned there. I helped with reliability testing and making posters and documents that complied with regulations for the company. My main takeaway came from speaking with the surgeons and neuroscientists there, who also took me to an actual surgery where I got to see the IPG devices being implanted and activated. They recommended a bunch of books to me, my favourite being <i>Projections</i> by recent Nobel laureate Karl Deisseroth.</p>
+<p>Sceneray works on deep brain stimulation devices. During my month there, I helped with reliability testing and prepared posters and documents to meet regulatory requirements.</p>
+
+<p>I also spoke with surgeons and neuroscientists and observed surgery in which an implantable pulse generator (IPG) was implanted and activated. They introduced me to <i>Projections</i> by Karl Deisseroth, my favourite of the books they recommended.</p>
