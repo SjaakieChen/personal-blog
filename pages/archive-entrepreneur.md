@@ -11,7 +11,9 @@ notes: []
 permalink: "/archive/entrepreneur/"
 ---
 
-<p>The idea behind <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/entrepreneur/single-tile.png">this repeatable wooden tile design</a> is to build larger structures from copies of one simple piece. The tabs and slots let the tiles fit together in different arrangements.</p>
+<p>I wanted <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/entrepreneur/single-tile.png">the wooden tile</a> to be laser-cuttable: a flat, 2D shape that could be used to build 3D structures. I designed the holes and notches to give people many ways of connecting the pieces.</p>
+
+<p>The friction between pieces had to be strong enough to hold them together. Keeping the design modular also allowed special modules, such as parts that rotate.</p>
 
 <p>The photos show a few structures made with the tiles, and the videos show the design in use. The <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/entrepreneur/registered-design.pdf">design registration</a> records the shape of the design.</p>
 
