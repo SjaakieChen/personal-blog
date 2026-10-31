@@ -1,10 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const {modalRequest, withoutModal, outsideDialog, targetFor, focusAfterClose} = require('../assets/archive-media-modal.js');
+const {modalRequest, withoutModal, reopenURL, outsideDialog, targetFor, requestFromLink, focusAfterClose} = require('../assets/archive-media-modal.js');
 
 const origin = 'https://sjaakiechen.github.io/personal-blog';
 
-test('CV deep links opt in while old links and blog post routes retain ordinary behavior', () => {
+test('current and legacy archive CV deep links enlarge while post routes stay ordinary', () => {
   const fragments = [
     'media-image/assets/evidence/entrepreneur/house.jpg',
     'media-video/assets/evidence/entrepreneur/spark-demonstration.mp4',
@@ -13,7 +13,8 @@ test('CV deep links opt in while old links and blog post routes retain ordinary 
   ];
   for (const id of fragments) {
     assert.equal(modalRequest(origin + '/archive/example/?media=modal#' + id).id, id);
-    assert.equal(modalRequest(origin + '/archive/example/#' + id), null);
+    assert.equal(modalRequest(origin + '/archive/example/#' + id).id, id);
+    assert.equal(modalRequest(origin + '/archive/example/?media=inline#' + id), null);
   }
   for (const path of ['/archive/', '/#post', '/posts/example/', '/evidence/ct-scanner/']) {
     assert.equal(modalRequest(origin + path + '?media=modal#media-test'), null);
@@ -24,10 +25,14 @@ test('CV deep links opt in while old links and blog post routes retain ordinary 
   }
 });
 
-test('dismissing enlargement preserves target, other query parameters and URL state', () => {
+test('dismissing current or legacy links keeps an explicit inline state and the exact media target', () => {
   const href = origin + '/archive/entrepreneur/?source=cv&media=modal#media-image/assets/evidence/entrepreneur/house.jpg';
-  assert.equal(withoutModal(href), origin + '/archive/entrepreneur/?source=cv#media-image/assets/evidence/entrepreneur/house.jpg');
+  assert.equal(withoutModal(href), origin + '/archive/entrepreneur/?source=cv&media=inline#media-image/assets/evidence/entrepreneur/house.jpg');
   assert.equal(modalRequest(withoutModal(href)), null);
+  const legacy = origin + '/archive/entrepreneur/#media-image/assets/evidence/entrepreneur/house.jpg';
+  assert.equal(modalRequest(withoutModal(legacy)), null);
+  assert.equal(new URL(withoutModal(legacy)).hash, new URL(legacy).hash);
+  assert.equal(withoutModal(withoutModal(legacy)), withoutModal(legacy), 'closing is idempotent');
 });
 
 test('only generated media in its direct media pane can be enlarged', () => {
@@ -70,4 +75,27 @@ test('closing a page-three PDF returns focus to its current slide rather than in
   assert.equal(focusAfterClose(block, previous, body), previous, 'preserve an existing visible focus target');
   pageThree.getClientRects = () => [];
   assert.equal(focusAfterClose(block, body, body), next, 'otherwise choose an enabled visible control');
+});
+
+test('a repeated archive media link reopens its existing target from the closed inline state', () => {
+  const id = 'media-image/assets/evidence/entrepreneur/house.jpg';
+  const legacy = origin + '/archive/entrepreneur/#' + id;
+  const closed = withoutModal(legacy);
+  const classes = (...values) => ({contains: value => values.includes(value)});
+  const block = {parentElement: {classList: classes('post-media')}, classList: classes('evidence-image'),
+    querySelectorAll: () => []};
+  const target = {id, closest: () => block};
+  const doc = {getElementById: value => value === id ? target : null};
+  const link = {href: '#' + id, closest: () => null};
+  const reopened = requestFromLink(doc, link, null, closed);
+  assert.equal(reopened.id, id);
+  assert.equal(modalRequest(reopened.href).id, id);
+  assert.equal(new URL(reopened.href).searchParams.get('media'), 'modal');
+  const imageLink = {href: origin + '/assets/evidence/entrepreneur/house.jpg', closest: () => null};
+  assert.equal(requestFromLink(doc, imageLink, {imageTarget: () => target}, closed).href, reopened.href,
+    'core media interception can be upgraded without following the raw file');
+  assert.equal(requestFromLink(doc, {href: '#media-unknown', closest: () => null}, null, closed), null);
+  assert.equal(requestFromLink(doc, {...link, closest: () => ({})}, null, closed), null,
+    'links inside the viewer retain their original purpose');
+  assert.equal(reopenURL(origin + '/posts/example/', id), null, 'post links are never upgraded');
 });

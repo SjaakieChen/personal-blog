@@ -6,7 +6,7 @@
     try {
       url = new URL(href);
       const modes = url.searchParams.getAll('media');
-      if (modes.length !== 1 || modes[0] !== 'modal'
+      if (modes.length > 1 || (modes.length === 1 && modes[0] !== 'modal')
           || !/\/archive\/[^/]+\/?$/.test(url.pathname)
           || !url.hash.startsWith('#media-')) return null;
       id = decodeURIComponent(url.hash.slice(1));
@@ -17,7 +17,19 @@
 
   function withoutModal(href) {
     const url = new URL(href);
-    url.searchParams.delete('media');
+    // An unqualified media fragment is a legacy CV link and now opens the
+    // viewer too. Explicit inline state keeps dismissal stable on refresh,
+    // late layout events, and Back/Forward without removing the media target.
+    url.searchParams.set('media', 'inline');
+    return url.href;
+  }
+
+  function reopenURL(href, id) {
+    let url;
+    try { url = new URL(href); } catch { return null; }
+    if (!/\/archive\/[^/]+\/?$/.test(url.pathname) || !id?.startsWith('media-')
+        || /[\u0000-\u001f\u007f]/.test(id)) return null;
+    url.searchParams.set('media', 'modal');url.hash = id;
     return url.href;
   }
 
@@ -43,6 +55,22 @@
     if (mediaKind(block) === 'pdf' && block.querySelectorAll(':scope > figure').length > 1
         && !block.classList.contains('evidence-pdf-carousel')) return null;
     return {target, block};
+  }
+
+  function requestFromLink(doc, link, evidence, href) {
+    if (!link || link.closest('dialog.archive-media-modal')) return null;
+    let target = evidence?.imageTarget?.(link) || evidence?.videoTarget?.(link) || evidence?.demoTarget?.(link);
+    if (!target) {
+      try {
+        const destination = new URL(link.href, href), current = new URL(href);
+        if (destination.origin !== current.origin || destination.pathname !== current.pathname
+            || !destination.hash.startsWith('#media-')) return null;
+        target = targetFor(doc, {id: decodeURIComponent(destination.hash.slice(1))})?.target;
+      } catch { return null; }
+    }
+    if (!target || !targetFor(doc, {id: target.id})) return null;
+    const destination = reopenURL(href, target.id);
+    return destination ? {href: destination, id: target.id} : null;
   }
 
   function focusAfterClose(block, previous, body) {
@@ -193,11 +221,24 @@
     for (const event of ['hashchange', 'popstate']) view.addEventListener(event, schedule);
     for (const event of ['blog-media-layout', 'blog-media-reveal', 'DOMContentLoaded']) doc.addEventListener(event, schedule);
     doc.addEventListener('load', schedule, true);
+    // The core media handler may already have prevented a normal content-link
+    // click while revealing its inline target. Upgrade that known target to
+    // the viewer, including clicking the same link after dismissing it.
+    view.addEventListener('click', event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest?.('a[href]');
+      const request = requestFromLink(doc, link, view.BlogEvidenceMedia, view.location.href);
+      if (!request) return;
+      event.preventDefault();
+      consumedURL = '';
+      if (view.location.href !== request.href) view.history.pushState(view.history.state, '', request.href);
+      schedule();
+    }, true);
     schedule();
     return {close: () => close(), sync};
   }
 
-  const api = {modalRequest, withoutModal, outsideDialog, mediaKind, targetFor, focusAfterClose, install};
+  const api = {modalRequest, withoutModal, reopenURL, outsideDialog, mediaKind, targetFor, requestFromLink, focusAfterClose, install};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) install(root);
 })(typeof window === 'object' ? window : globalThis);
