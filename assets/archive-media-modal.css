@@ -1,0 +1,142 @@
+/* CV media links opt in explicitly; ordinary archive and post links stay inline. */
+dialog.archive-media-modal {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  width: min(92vw, 1500px);
+  height: 90vh;
+  height: 90dvh;
+  max-width: 92vw;
+  max-height: 90dvh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid #35594a;
+  border-radius: 0;
+  color: #26343c;
+  background: #fff;
+  overflow: hidden;
+}
+dialog.archive-media-modal[open] { display: flex; flex-direction: column; }
+dialog.archive-media-modal::backdrop { background: rgb(10 35 26 / 93%); }
+.archive-media-modal-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #d7dfdb;
+}
+.archive-media-modal-title { flex: 1 1 180px; min-width: 0; margin: 0; font: 15px/1.4 system-ui, sans-serif; }
+.archive-media-modal-close {
+  min-width: 72px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid #35594a;
+  border-radius: 0;
+  color: #173b2d;
+  background: #fff;
+  font: 14px/1.3 system-ui, sans-serif;
+  cursor: pointer;
+}
+.archive-media-modal-close:focus-visible { outline: 3px solid #1f5f99; outline-offset: 2px; }
+.archive-media-modal-image-navigation { display: flex; align-items: center; gap: 8px; font: 13px/1.4 system-ui, sans-serif; }
+.archive-media-modal-image-navigation button {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid #35594a;
+  border-radius: 0;
+  color: #173b2d;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.archive-media-modal-image-navigation button:disabled { color: #929a96; border-color: #d7dfdb; cursor: default; }
+.archive-media-modal-image-navigation button:focus-visible { outline: 3px solid #1f5f99; outline-offset: 2px; }
+.archive-media-modal-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+}
+.archive-media-modal .archive-media-modal-content > figcaption {
+  flex: 0 0 auto;
+  margin: 6px 0 0;
+  text-align: center;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+.archive-media-modal-content--image > a {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.archive-media-modal .archive-media-modal-content--image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.archive-media-modal .archive-media-modal-content--video > iframe,
+.archive-media-modal .archive-media-modal-content--video > video {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  object-fit: contain;
+  background: #0a231a;
+}
+.archive-media-modal .evidence-demo-stage { flex: 1 1 auto; min-height: 0; }
+.archive-media-modal .evidence-demo-stage iframe {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border: 0;
+}
+.archive-media-modal-content--pdf {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  overflow: hidden;
+}
+.archive-media-modal .archive-media-modal-content--pdf > figure {
+  display: flex;
+  flex-direction: column;
+  grid-area: 1 / 1;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+}
+.archive-media-modal .archive-media-modal-content--pdf .evidence-pdf-frame,
+.archive-media-modal .archive-media-modal-content--pdf > figure > a {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  aspect-ratio: auto;
+}
+.archive-media-modal .archive-media-modal-content--pdf img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.archive-media-modal .archive-media-modal-content--pdf figcaption { flex: 0 0 auto; }
+.archive-media-modal .evidence-pdf-controls { grid-area: 2 / 1; }
+@media (max-width: 600px) {
+  dialog.archive-media-modal { width: 96vw; max-width: 96vw; height: 94vh; height: 94dvh; max-height: 94dvh; }
+  .archive-media-modal-header { gap: 8px; padding: 6px 8px; }
+  .archive-media-modal-content { padding: 8px; }
+}

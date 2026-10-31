@@ -8,3 +8,9 @@ layout: default
 </div>
 {% include media-pane.html entry=page %}
 </article>
+
+{% if page.url contains '/archive/' %}
+<link rel="stylesheet" href="{{ '/assets/archive-media-modal.css' | relative_url }}?v={{ site.time | date: '%s' }}">
+<script src="{{ '/assets/archive-media-modal.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
+{% endif %}
+
