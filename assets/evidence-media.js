@@ -69,6 +69,42 @@
     return '#media-image/assets/evidence/' + new URL(image).pathname.slice(assets.pathname.length);
   }
 
+  function videoURL(value, base, assetBase) {
+    if (typeof value !== 'string' || /[\\\s<>]/.test(value)
+        || /(?:^|\/)(?:\.|%2e){1,2}(?:\/|[?#]|$)/i.test(value)) return null;
+    try {
+      const current = new URL(base);
+      let url = new URL(value, current);
+      const assets = new URL('assets/evidence/', assetBase || new URL('/', current));
+      const filename = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.mp4$/;
+      const publicAssets = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/';
+      const fragmentPrefix = '#media-video/assets/evidence/';
+      if (value.startsWith(fragmentPrefix)) {
+        const relative = value.slice(fragmentPrefix.length);
+        if (!filename.test(relative)) return null;
+        url = new URL(relative, assets);
+      } else if (value.startsWith(publicAssets)) {
+        const relative = value.slice(publicAssets.length).split(/[?#]/, 1)[0];
+        if (!filename.test(relative)) return null;
+        // Preview only this blog's own deployed MP4 assets on the private desk.
+        url = new URL(relative, assets);
+      }
+      const localHTTP = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(current.hostname);
+      if ((url.protocol !== 'https:' && !localHTTP) || url.origin !== current.origin
+          || assets.origin !== current.origin || url.username || url.password || !url.pathname.startsWith(assets.pathname)) return null;
+      if (!filename.test(url.pathname.slice(assets.pathname.length))) return null;
+      url.search = '';url.hash = '';
+      return url.href;
+    } catch { return null; }
+  }
+
+  function videoFragment(value, base, assetBase) {
+    const video = videoURL(value, base, assetBase);
+    if (!video) return null;
+    const assets = new URL('assets/evidence/', assetBase || new URL('/', base));
+    return '#media-video/assets/evidence/' + new URL(video).pathname.slice(assets.pathname.length);
+  }
+
   function youtubeId(value) {
     if (typeof value !== 'string') return null;
     let url;
@@ -139,6 +175,7 @@
       const href = link.getAttribute('href');
       if (href.startsWith('#') && !knownPdf(href, entries, body.ownerDocument.baseURI)
           && !imageURL(href, body.ownerDocument.baseURI, siteBase)
+          && !videoURL(href, body.ownerDocument.baseURI, siteBase)
           && link.closest('.citation, [data-reference]')) {
         // Resolve a numbered citation only within this post's own References.
         // The citation stays the anchor; the source supplies its URL and title.
@@ -151,10 +188,13 @@
       }
       const value = source.getAttribute('href'), id = youtubeId(value);
       const image = imageURL(value, body.ownerDocument.baseURI, siteBase);
+      const video = videoURL(value, body.ownerDocument.baseURI, siteBase);
       const demo = demoURL(value, body.ownerDocument.baseURI, siteBase);
       const loadModes = demo ? new URL(value, body.ownerDocument.baseURI).searchParams.getAll('load') : [];
       const autoLoad = loadModes.length === 1 && loadModes[0] === 'auto';
       const item = id ? {type: 'video', key: 'video:' + id, id, title: source.textContent.trim() || 'YouTube video'}
+        : video ? {type: 'native-video', key: 'native-video:' + video, url: video,
+          title: source.textContent.trim() || 'Project video'}
         : image ? {type: 'image', key: 'image:' + image, url: image, title: source.textContent.trim() || 'Project screenshot'}
         : demo ? {type: 'demo', key: 'demo:' + (autoLoad ? 'auto:' : '') + demo, url: demo, autoLoad,
           title: source.textContent.trim() || (autoLoad ? 'Interactive demo' : 'Interactive emulator')}
@@ -195,11 +235,13 @@
   function videoTarget(link) {
     const copy = link.closest('.post-copy');
     if (!copy) return null;
-    const id = youtubeId(link.getAttribute('href'));
+    const href = link.getAttribute('href'), id = youtubeId(href);
+    const url = videoURL(href, link.ownerDocument.baseURI, siteBase);
+    const key = id ? 'video:' + id : url ? 'native-video:' + url : null;
     const pane = copy.closest('.post')?.querySelector(':scope > .post-media');
-    if (!id || !pane || pane.hidden) return null;
+    if (!key || !pane || pane.hidden) return null;
     return [...pane.children].find(block => !block.hidden && block.classList.contains('evidence-video')
-      && block.dataset.mediaKey === 'video:' + id) || null;
+      && block.dataset.mediaKey === key) || null;
   }
 
   function mediaFragmentTarget(doc, hash) {
@@ -323,6 +365,13 @@
       const caption = doc.createElement('figcaption');
       caption.textContent = item.title;
       block.append(frame, caption);
+    } else if (item.type === 'native-video') {
+      block.className = 'evidence-video';
+      const video = doc.createElement('video'), caption = doc.createElement('figcaption');
+      video.src = item.url;video.controls = true;video.preload = 'metadata';video.playsInline = true;
+      video.setAttribute('aria-label', item.title);
+      caption.textContent = item.title;
+      block.append(video, caption);
     } else if (item.type === 'demo') {
       createDemo(doc, block, item);
     } else if (item.type === 'image') {
@@ -510,6 +559,10 @@
         assignMediaId(block, 'media-video-' + item.id, blocks);
         block.querySelector('iframe').title = item.title;
         block.querySelector('figcaption').textContent = item.title;
+      } else if (item.type === 'native-video') {
+        assignMediaId(block, videoFragment(item.url, body.ownerDocument.baseURI, siteBase).slice(1), blocks);
+        block.querySelector('video').setAttribute('aria-label', item.title);
+        block.querySelector('figcaption').textContent = item.title;
       } else if (item.type === 'image') {
         block.id = imageFragment(item.url, body.ownerDocument.baseURI, siteBase).slice(1);
         block.querySelector('img').alt = item.title;
@@ -614,7 +667,7 @@
     return {observer, render};
   }
 
-  const api = {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, videoTarget, mediaFragmentTarget, revealMediaFragment, alignPane, renderPane, enhanceArticle, watchPreview};
+  const api = {youtubeId, imageURL, imageFragment, videoURL, videoFragment, demoURL, pdfManifest, knownPdf, mediaIn, imageTarget, demoTarget, videoTarget, mediaFragmentTarget, revealMediaFragment, alignPane, renderPane, enhanceArticle, watchPreview};
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root.document) {
     root.BlogEvidenceMedia = api;
@@ -690,3 +743,4 @@
     }
   }
 })(typeof window === 'object' ? window : globalThis);
+

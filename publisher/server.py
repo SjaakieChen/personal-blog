@@ -79,6 +79,15 @@ def private_demo_file(path):
     return file if state in root.parents and root in file.parents and file.is_file() else None
 
 
+def public_video_file(path):
+    if path.startswith(PRIVATE_MEDIA_PREFIX) or not re.fullmatch(r'/assets/evidence/[a-zA-Z0-9_-]+/[a-zA-Z0-9][a-zA-Z0-9_.-]*\.mp4', path):
+        return None
+    project = ROOT.resolve()
+    media = (project/'assets/evidence').resolve()
+    file = (project/path.lstrip('/')).resolve()
+    return file if project in media.parents and media in file.parents and file.is_file() else None
+
+
 def read_drafts():
     path = STATE/'drafts.json'
     if not path.exists():
@@ -645,6 +654,11 @@ class Handler(BaseHTTPRequestHandler):
                 if file is None:
                     return self.send(404, {'error': 'Not found.'})
                 return self.send(200, file.read_bytes(), MEDIA_TYPES[file.suffix], filename=file.name)
+            if path.startswith('/assets/evidence/') and path.endswith('.mp4'):
+                file = public_video_file(path)
+                if file is None:
+                    return self.send(404, {'error': 'Not found.'})
+                return self.send(200, file.read_bytes(), 'video/mp4')
             if path == '/api/deployment':
                 commit = parse_qs(urlsplit(self.path).query).get('commit', [''])[0]
                 if not re.fullmatch(r'[a-f0-9]{40}', commit):

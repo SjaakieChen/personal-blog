@@ -1,6 +1,106 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {youtubeId, imageURL, imageFragment, demoURL, pdfManifest, knownPdf, alignPane, mediaFragmentTarget, revealMediaFragment} = require('../assets/evidence-media');
+const {youtubeId, imageURL, imageFragment, videoURL, videoFragment, demoURL, pdfManifest, knownPdf, alignPane, mediaIn, renderPane, videoTarget, mediaFragmentTarget, revealMediaFragment} = require('../assets/evidence-media');
+
+test('native videos accept only safe MP4 evidence assets and keep stable media fragments', () => {
+  const relative = 'entrepreneur/spark-demonstration.mp4';
+  const fragment = '#media-video/assets/evidence/' + relative;
+  const publicURL = 'https://sjaakiechen.github.io/personal-blog/assets/evidence/' + relative;
+  for (const [base, assets, expected] of [
+    ['https://private.example:8446/archive/', 'https://private.example:8446/', 'https://private.example:8446/assets/evidence/' + relative],
+    ['https://sjaakiechen.github.io/personal-blog/archive/', 'https://sjaakiechen.github.io/personal-blog/', publicURL],
+    ['http://127.0.0.1:8787/archive/', 'http://127.0.0.1:8787/', 'http://127.0.0.1:8787/assets/evidence/' + relative]
+  ]) {
+    assert.equal(videoURL(fragment, base, assets), expected);
+    assert.equal(videoURL(publicURL + '?v=1#view', base, assets), expected);
+    assert.equal(videoURL(expected, base, assets), expected);
+    assert.equal(videoFragment(expected, base, assets), fragment);
+  }
+  const base = 'https://private.example:8446/archive/';
+  for (const invalid of [
+    'https://external.example/assets/evidence/movie.mp4',
+    'https://user@private.example:8446/assets/evidence/movie.mp4',
+    'https://private.example:8447/assets/evidence/movie.mp4',
+    'http://private.example:8446/assets/evidence/movie.mp4',
+    '/assets/movie.mp4', '/assets/evidence-other/movie.mp4',
+    '/assets/evidence/../movie.mp4', '/assets/evidence/one/../movie.mp4',
+    '/assets/evidence/one/%2e%2e/movie.mp4', '/assets/evidence/movie%2emp4',
+    '/assets/evidence/movie.mov', '/assets/evidence/movie.html',
+    '/assets/evidence/movie.mp4/extra', '/assets/evidence/movie.mp4\\extra',
+    'data:video/mp4;base64,AAAA', 'javascript:alert(1)', null,
+    '#media-video/assets/evidence/movie.mp4?autoplay=1',
+    '#media-video/assets/evidence/movie.mp4#other',
+    publicURL.replace('sjaakiechen.github.io', 'sjaakiechen.github.io.example.org'),
+    publicURL.replace('sjaakiechen.github.io', 'other.github.io')
+  ]) assert.equal(videoURL(invalid, base), null, String(invalid));
+  assert.equal(videoURL('/assets/evidence/movie.mp4', 'http://private.example/archive/'), null);
+  assert.equal(videoFragment('https://external.example/movie.mp4', base), null);
+});
+
+test('native MP4 links render controlled inline video, deduplicate and preserve playback on rerender', t => {
+  const globals = ['ResizeObserver', 'MutationObserver', 'requestAnimationFrame', 'addEventListener'];
+  const originals = new Map(globals.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  t.after(() => {
+    for (const key of globals) {
+      if (originals.get(key)) Object.defineProperty(globalThis, key, originals.get(key));
+      else delete globalThis[key];
+    }
+  });
+  globalThis.ResizeObserver = globalThis.MutationObserver = class {observe() {} disconnect() {}};
+  globalThis.requestAnimationFrame = () => {};
+  globalThis.addEventListener = () => {};
+  const nodes = [];
+  const doc = {baseURI: 'https://example.test/archive/', fullscreenElement: null,
+    getElementById: id => nodes.find(node => node.id === id) || null,
+    createElement(tagName) {
+      const attributes = new Map(), style = new Map();
+      const node = {tagName, ownerDocument: doc, children: [], dataset: {}, hidden: false, autoplay: false,
+        className: '', classList: {contains: name => node.className.split(' ').includes(name)},
+        style: {getPropertyValue: key => style.get(key), setProperty: (key, value) => style.set(key, value),
+          removeProperty: key => style.delete(key)},
+        append(...children) {for (const child of children) {child.parentElement = this;this.children.push(child);}},
+        insertBefore(child, next) {child.parentElement = this;this.children.splice(next ? this.children.indexOf(next) : this.children.length, 0, child);},
+        setAttribute: (name, value) => attributes.set(name, value),
+        getAttribute: name => attributes.get(name), hasAttribute: name => attributes.has(name),
+        querySelector: selector => node.children.find(child => child.tagName === selector) || null,
+        getBoundingClientRect: () => ({top: 100, bottom: 400, left: 550}),
+      };
+      nodes.push(node);return node;
+    }};
+  const pane = doc.createElement('aside'), copy = {getBoundingClientRect: () => ({right: 500})};
+  copy.closest = () => ({querySelector: () => pane});
+  const href = '/assets/evidence/entrepreneur/spark-demonstration.mp4';
+  const makeLink = value => ({ownerDocument: doc, textContent: 'Wooden tile demonstration',
+    getAttribute: () => value, closest: selector => selector === '.post-copy' ? copy : null,
+    getClientRects: () => [{top: 150, bottom: 170}]});
+  const links = [makeLink(href), makeLink(href + '?v=2#view')];
+  const body = {ownerDocument: doc, closest: () => copy, contains: link => links.includes(link),
+    querySelectorAll: () => links, classList: {contains: () => false},
+    getBoundingClientRect: () => ({top: 100, bottom: 1000})};
+  assert.equal(mediaIn(body).length, 1, 'query and fragment variants produce one player');
+  renderPane(body, pane);
+  assert.equal(pane.children.length, 1);
+  const block = pane.children[0], video = block.querySelector('video');
+  assert.ok(video, 'MP4 evidence uses a native player');
+  assert.equal(block.querySelector('iframe'), null);
+  assert.equal(video.src, 'https://example.test' + href);
+  assert.equal(video.controls, true);
+  assert.equal(video.preload, 'metadata');
+  assert.equal(video.playsInline, true);
+  assert.equal(video.autoplay, false, 'loading a page never starts the recording');
+  assert.equal(video.getAttribute('aria-label'), 'Wooden tile demonstration');
+  assert.equal(block.id, 'media-video/assets/evidence/entrepreneur/spark-demonstration.mp4');
+  assert.equal(videoTarget(links[0]), block, 'clicking the original asset link locates its inline player');
+  video.currentTime = 12;
+  links[0].textContent = 'Updated demonstration caption';
+  renderPane(body, pane);
+  assert.equal(pane.children[0].querySelector('video'), video, 'text edits preserve the live player');
+  assert.equal(video.currentTime, 12);
+  assert.equal(video.getAttribute('aria-label'), 'Updated demonstration caption');
+  assert.equal(block.querySelector('figcaption').textContent, 'Updated demonstration caption');
+  block.hidden = true;
+  assert.equal(videoTarget(links[0]), null, 'collapsed media keeps normal link behavior until expanded');
+});
 
 test('collapsed previews hide complete media blocks that would cross Show more', () => {
   let collapsed = true;

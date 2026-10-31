@@ -24,5 +24,24 @@
       16
     ],
     "total_pages": 22
+  },
+  "/archive/shadow-ct/": {
+    "pdf": "/assets/evidence/ct-scanner/poster.pdf",
+    "public_pdf": "https://sjaakiechen.github.io/personal-blog/assets/evidence/ct-scanner/poster.pdf",
+    "title": "CT scanner group project poster",
+    "previews": [
+      "/assets/evidence/ct-scanner/poster-page-1.webp",
+      "/assets/evidence/ct-scanner/poster-page-2.webp",
+      "/assets/evidence/ct-scanner/poster-page-3.webp"
+    ]
+  },
+  "/archive/entrepreneur/": {
+    "pdf": "/assets/evidence/entrepreneur/registered-design.pdf",
+    "public_pdf": "https://sjaakiechen.github.io/personal-blog/assets/evidence/entrepreneur/registered-design.pdf",
+    "title": "UK registered design 6429401",
+    "previews": [
+      "/assets/evidence/entrepreneur/registered-design-page-1.webp",
+      "/assets/evidence/entrepreneur/registered-design-page-2.webp"
+    ]
   }
 }
