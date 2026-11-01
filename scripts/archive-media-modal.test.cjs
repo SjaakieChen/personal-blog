@@ -35,6 +35,28 @@ test('dismissing current or legacy links keeps an explicit inline state and the 
   assert.equal(withoutModal(withoutModal(legacy)), withoutModal(legacy), 'closing is idempotent');
 });
 
+test('older shadow CT CV poster links resolve to the current shared poster and preserve the requested page', () => {
+  for (const page of [1, 2, 3]) {
+    const oldId = 'media-archive--shadow-ct-page-' + page;
+    const currentId = 'media-evidence--ct-scanner-page-' + page;
+    for (const query of ['', '?media=modal']) {
+      const href = origin + '/archive/shadow-ct/' + query + '#' + oldId;
+      const request = modalRequest(href);
+      assert.equal(request.id, currentId);
+      assert.equal(request.href, href, 'retain the original saved URL');
+      assert.equal(request.hash, '#' + oldId);
+      const closed = withoutModal(href);
+      assert.equal(modalRequest(closed), null, 'closing the legacy link stays inline');
+      assert.equal(new URL(closed).hash, '#' + oldId);
+    }
+    assert.equal(modalRequest(origin + '/archive/shadow-ct/#' + currentId).id, currentId);
+    assert.equal(modalRequest(origin + '/archive/other/#' + oldId).id, oldId,
+      'the compatibility rule cannot retarget another archive');
+  }
+  const invalid = 'media-archive--shadow-ct-page-0';
+  assert.equal(modalRequest(origin + '/archive/shadow-ct/#' + invalid).id, invalid);
+});
+
 test('only generated media in its direct media pane can be enlarged', () => {
   const classes = (...values) => ({contains: value => values.includes(value)});
   const pane = {classList: classes('post-media')};
@@ -98,4 +120,19 @@ test('a repeated archive media link reopens its existing target from the closed 
   assert.equal(requestFromLink(doc, {...link, closest: () => ({})}, null, closed), null,
     'links inside the viewer retain their original purpose');
   assert.equal(reopenURL(origin + '/posts/example/', id), null, 'post links are never upgraded');
+});
+
+test('a legacy shadow CT page link can reopen the current poster after dismissal', () => {
+  const oldId = 'media-archive--shadow-ct-page-3', id = 'media-evidence--ct-scanner-page-3';
+  const href = withoutModal(origin + '/archive/shadow-ct/#' + oldId);
+  const classes = (...values) => ({contains: value => values.includes(value)});
+  const block = {parentElement: {classList: classes('post-media')},
+    classList: classes('evidence-pdf', 'evidence-pdf-carousel'), querySelectorAll: () => [{}, {}, {}]};
+  const target = {id, closest: () => block};
+  const doc = {getElementById: value => value === id ? target : null};
+  const link = {href: '#' + oldId, closest: () => null};
+  const request = requestFromLink(doc, link, null, href);
+  assert.equal(request.id, id);
+  assert.equal(new URL(request.href).hash, '#' + id);
+  assert.equal(modalRequest(request.href).id, id);
 });

@@ -1,6 +1,13 @@
 (function (root) {
   'use strict';
 
+  function compatibleMediaId(url, id) {
+    // Older CVs used the archive route to name this poster; its shared PDF
+    // previews now use the evidence route. Keep those saved page links usable.
+    if (!/\/archive\/shadow-ct\/?$/.test(url.pathname)) return id;
+    return id.replace(/^media-archive--shadow-ct-page-([1-9]\d*)$/, 'media-evidence--ct-scanner-page-$1');
+  }
+
   function modalRequest(href) {
     let url, id;
     try {
@@ -9,7 +16,7 @@
       if (modes.length > 1 || (modes.length === 1 && modes[0] !== 'modal')
           || !/\/archive\/[^/]+\/?$/.test(url.pathname)
           || !url.hash.startsWith('#media-')) return null;
-      id = decodeURIComponent(url.hash.slice(1));
+      id = compatibleMediaId(url, decodeURIComponent(url.hash.slice(1)));
     } catch { return null; }
     return id.startsWith('media-') && !/[\u0000-\u001f\u007f]/.test(id)
       ? {href: url.href, id, hash: url.hash} : null;
@@ -65,7 +72,7 @@
         const destination = new URL(link.href, href), current = new URL(href);
         if (destination.origin !== current.origin || destination.pathname !== current.pathname
             || !destination.hash.startsWith('#media-')) return null;
-        target = targetFor(doc, {id: decodeURIComponent(destination.hash.slice(1))})?.target;
+        target = targetFor(doc, {id: compatibleMediaId(destination, decodeURIComponent(destination.hash.slice(1)))})?.target;
       } catch { return null; }
     }
     if (!target || !targetFor(doc, {id: target.id})) return null;
