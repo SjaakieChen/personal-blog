@@ -16,7 +16,7 @@ permalink: "/archive/imec/"
 <p>This is my <a href="https://www.youtube.com/watch?v=B5ln2s0bnAY">pre-alignment procedure</a>: vision with cascading precision, which resolves that problem and always works.</p>
 
 <h2>Optics and the machine</h2>
-<p>A picture of the two <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/imec/movable-lenses.jpg">movable ball lenses</a> on their positioning tools.</p>
+<p>A close-up of a <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/imec/movable-lenses.jpg">ball lens on its positioning tool</a>, with a 500 µm scale bar.</p>
 <p>A screenshot of my <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/imec/optics-model.jpg">optics model</a>, shown at nominal alignment.</p>
 <p>A screenshot of the <a href="https://sjaakiechen.github.io/personal-blog/assets/evidence/imec/machine-emulator.jpg">machine emulator</a>.</p>
 
