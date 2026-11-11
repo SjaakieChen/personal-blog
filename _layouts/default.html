@@ -20,7 +20,7 @@
 <a data-feed-navigation href="{% unless page.home %}{{ '/' | relative_url }}{% endunless %}#{{ post.slug | escape }}"{% if page.url == post.url %} aria-current="page"{% endif %}>{{ post.title | escape }}</a>
 {% endfor %}
 {% assign navigation_pages = site.pages | where: 'layout', 'page' | where_exp: 'item', 'item.path contains "pages/"' | sort: 'title' %}
-{% for item in navigation_pages %}{% unless item.url contains '/archive/' %}
+{% for item in navigation_pages %}{% unless item.url contains '/archive/' or item.url == '/interesting-blogs/' %}
 <a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title | escape }}</a>
 {% endunless %}{% endfor %}
 </nav></aside>
