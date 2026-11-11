@@ -11,7 +11,7 @@
 <script src="{{ '/assets/evidence-media.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>
 </head><body>
 <a class="skip-link" href="#posts">Skip to posts</a>
-<button class="sidebar-toggle" type="button" aria-label="Open sidebar" aria-expanded="false" aria-controls="site-sidebar">Menu</button>
+<button class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="site-sidebar">Timeline</button>
 <div class="blog-shell blog-shell--collapsible">
 <aside class="sidebar" id="site-sidebar" aria-label="Site navigation" hidden><nav class="timeline" aria-label="Posts and links">
 {% assign newest_posts = site.posts | sort: 'published_at' | reverse %}{% assign previous_date = '' %}{% for post in newest_posts %}
