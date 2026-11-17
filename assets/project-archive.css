@@ -94,8 +94,26 @@
   max-width: 620px;
 }
 
-.archive-project-video {
+.archive-project-video-preview {
+  position: relative;
+}
+
+.archive-project-video-preview img {
   aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.archive-project-video-preview span {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  width: fit-content;
+  padding: 8px 12px;
+  background: #fff;
+  color: var(--blue);
+  font-size: 17px;
+  line-height: 1.35;
 }
 
 .archive-project-demo {
