@@ -1,5 +1,5 @@
 ---
-layout: post
+layout: page
 title: "Start"
 quote: "And God said, Let there be light: and there was light."
 render_with_liquid: false
@@ -9,7 +9,9 @@ quote_reference: "6f0315c9-53ec-4318-882a-af4a6e270114"
 quote_locator: "Genesis 1:3"
 notes: [{"id":"505e8f15-3a4a-4f41-93de-4fed8c9d7a2f","text":"The reason I like it so much is because I feel like people sometimes argue that cool but expensive things need to be justified through a lens of utilitarianism, i.e., instead of doing this, why not feed the starving kids? But that is not how the world could or should work. IMO."}]
 date: "2026-10-16T20:22:43.305Z"
-permalink: "/posts/genesis-43e13b07/"
+permalink: "/archive/start/"
+previous_paths: ["_posts/2026-10-16-genesis-43e13b07.md"]
+previous_source_sha: "f1ee4e20e8ea79db4742f41819200214b0c635bf"
 ---
 
 <p>I have decided to start a blog. </p>

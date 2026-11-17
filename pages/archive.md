@@ -16,3 +16,4 @@ permalink: "/archive/"
 <p><a href="https://sjaakiechen.github.io/personal-blog/archive/sceneray/">Sceneray internship</a></p>
 <p><a href="https://sjaakiechen.github.io/personal-blog/archive/entrepreneur/">Toy entrepreneur experience</a></p>
 <p><a href="https://sjaakiechen.github.io/personal-blog/interesting-blogs/">Interesting blogs</a></p>
+<p><a href="https://sjaakiechen.github.io/personal-blog/archive/start/">Start</a></p>
