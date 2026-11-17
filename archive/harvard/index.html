@@ -21,13 +21,14 @@ permalink: /archive/harvard/
 
   <section class="archive-project" id="photonics" aria-labelledby="photonics-title">
     <h2 id="photonics-title">Photonic alignment at imec</h2>
-    <p class="archive-project-summary">At imec’s CMST group at Ghent University, I modelled the optics and developed a procedure for positioning movable ball lenses to couple laser light into a chip waveguide.</p>
+    <p class="archive-project-summary">At imec’s CMST group at Ghent University, I developed a procedure for positioning movable ball lenses to couple laser light into a chip waveguide. To locate a lens relative to the laser on the chip, I needed a clear image with a known scale. Getting close enough to take that image safely already required knowing where the lens was. I started from a safe position with plenty of clearance and a blurry view, then used each image to guide a closer, more precise move.</p>
+    <p class="archive-project-summary">For fine alignment, I modelled the optics and Gaussian beam propagation. I tried both model-guided alignment and blind gradient ascent to maximise the measured optical power.</p>
     <div class="archive-project-grid">
       <figure>
         <a href="{{ '/assets/evidence/imec/movable-lenses.jpg' | relative_url }}">
           <img src="{{ '/assets/evidence/imec/movable-lenses.jpg' | relative_url }}" width="1280" height="960" alt="A ball lens on its positioning tool with a 500 micrometre scale bar">
         </a>
-        <figcaption><strong>Movable ball lens.</strong> This close-up shows a lens on the tool used to position it. The scale bar is 500 µm.</figcaption>
+        <figcaption><strong>Movable ball lens.</strong> This close-up shows a lens on its positioning tool, with the chip visible as the horizontal grey rectangle. The scale bar is 500 µm.</figcaption>
       </figure>
       <figure>
         <a href="{{ '/assets/evidence/imec/optics-model.jpg' | relative_url }}">
@@ -47,7 +48,7 @@ permalink: /archive/harvard/
 
   <section class="archive-project" id="cellular-automaton" aria-labelledby="cellular-automaton-title">
     <h2 id="cellular-automaton-title">Regenerative neural cellular automaton</h2>
-    <p class="archive-project-summary">I reproduced the <a href="https://distill.pub/2020/growing-ca/">Growing Neural Cellular Automata</a> method in PyTorch using a Noto Emoji image as the target. I set up resumable training on a repurposed laptop and tested how the trained model grows and repairs the pattern.</p>
+    <p class="archive-project-summary">I reproduced the <a href="https://distill.pub/2020/growing-ca/">Growing Neural Cellular Automata</a> method in PyTorch using a Noto Emoji image as the target. I set up resumable training on an old Linux laptop at home in Belgium and connected to it remotely over SSH through Tailscale. I tested how the trained model grows and repairs the pattern.</p>
     <figure class="archive-project-player">
       <iframe class="archive-project-demo" src="{{ '/assets/evidence/demos/joy-checkpoint-5850-live/index.html' | relative_url }}" title="Interactive growth and regeneration demo" loading="lazy" sandbox="allow-scripts"></iframe>
       <figcaption><strong>Growth and repair.</strong> Use Reset to grow the pattern from a seed. Click or drag across the grown pattern to erase cells and watch how the local update rule responds. <a href="{{ '/assets/evidence/demos/joy-checkpoint-5850-live/index.html' | relative_url }}">Open the demo in its own tab</a>.</figcaption>
@@ -56,13 +57,13 @@ permalink: /archive/harvard/
 
   <section class="archive-project" id="shadow-ct" aria-labelledby="shadow-ct-title">
     <h2 id="shadow-ct-title">Shadow CT scanner</h2>
-    <p class="archive-project-summary">My physics group at Imperial College London built a scanner that reconstructs objects from visible-light shadows. I worked on the reconstruction software and on getting the camera, turntable and electronics to work together. I set up the TIGRE reconstruction library on an NVIDIA GPU.</p>
+    <p class="archive-project-summary">My physics group at Imperial College London built a scanner that reconstructs objects from visible-light shadows. I worked on the reconstruction software and on getting the camera, turntable and electronics to work together. I ran TIGRE, a tomography toolbox developed by CERN and the University of Bath, on my NVIDIA GPU using the CUDA drivers I already had installed.</p>
     <div class="archive-project-grid">
       <figure>
         <a href="{{ '/assets/evidence/ct-scanner/knight-shadow-apparatus.png' | relative_url }}">
           <img src="{{ '/assets/evidence/ct-scanner/knight-shadow-apparatus.png' | relative_url }}" width="1912" height="1135" loading="lazy" alt="A chess knight on the scanner’s rotating platform casting a shadow on a screen">
         </a>
-        <figcaption><strong>Scanning a knight.</strong> The piece sits on a rotating platform while a phone records its shadow from successive angles.</figcaption>
+        <figcaption><strong>Scanning a knight.</strong> The piece sits on a rotating platform while an iPhone records its shadow. We matched the stepper motor’s rate to the iPhone’s frame rate so the camera captured every step.</figcaption>
       </figure>
       <figure>
         <a href="{{ '/assets/evidence/ct-scanner/poster-page-3.webp' | relative_url }}">
@@ -105,7 +106,7 @@ permalink: /archive/harvard/
     <div class="archive-project-grid">
       <figure>
         <video class="archive-project-portrait-video" src="{{ '/assets/evidence/entrepreneur/spark-demonstration.mp4' | relative_url }}" width="480" height="848" controls playsinline preload="metadata" aria-label="Customer feedback on the wooden tiles"></video>
-        <figcaption><strong>Customer feedback.</strong> A customer shows structures built with the wooden tiles. <a href="{{ '/assets/evidence/entrepreneur/spark-demonstration.mp4' | relative_url }}">Open the video</a>.</figcaption>
+        <figcaption><strong>Customer feedback.</strong> I knocked on a few doors to ask for feedback, and these lovely people sent me a video of what they built. <a href="{{ '/assets/evidence/entrepreneur/spark-demonstration.mp4' | relative_url }}">Open the video</a>.</figcaption>
       </figure>
       <figure>
         <a href="{{ '/assets/evidence/entrepreneur/registered-design-page-1.webp' | relative_url }}">
@@ -118,7 +119,7 @@ permalink: /archive/harvard/
 
   <section class="archive-project" id="fibre-optics" aria-labelledby="fibre-optics-title">
     <h2 id="fibre-optics-title">Fibre optics research</h2>
-    <p class="archive-project-summary">For my IB Physics extended essay, I used a second fibre on an alignment bench to sample the optical power from a single-mode fibre at different positions. I compared the measurements with a Gaussian beam model.</p>
+    <p class="archive-project-summary">For my IB Physics extended essay in high school, I used a second fibre on an alignment bench to sample the optical power from a single-mode fibre at different positions. I compared the measurements with a Gaussian beam model.</p>
     <figure class="archive-project-player">
       <a href="{{ '/assets/evidence/ib-physics/paper-page-16.webp' | relative_url }}">
         <img src="{{ '/assets/evidence/ib-physics/paper-page-16.webp' | relative_url }}" loading="lazy" alt="Essay plot comparing measured optical power and a Gaussian model as the receiving fibre is displaced">
