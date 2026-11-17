@@ -1,0 +1,126 @@
+---
+layout: default
+title: Selected project evidence
+description: Project media by Jiaqi Chen for the Harvard application.
+permalink: /archive/harvard/
+---
+<link rel="stylesheet" href="{{ '/assets/project-archive.css' | relative_url }}?v={{ site.time | date: '%s' }}">
+
+<article class="post project-archive">
+  <header class="project-archive-header">
+    <p class="project-archive-byline">Jiaqi Chen · Harvard application</p>
+    <h1>{{ page.title | escape }}</h1>
+    <nav class="project-archive-jumps" aria-label="Projects on this page">
+      <a href="#photonics">Photonic alignment</a>
+      <a href="#cellular-automaton">Cellular automaton</a>
+      <a href="#shadow-ct">Shadow CT scanner</a>
+      <a href="#wooden-tiles">Wooden tiles</a>
+      <a href="#fibre-optics">Fibre optics research</a>
+    </nav>
+  </header>
+
+  <section class="archive-project" id="photonics" aria-labelledby="photonics-title">
+    <h2 id="photonics-title">Photonic alignment at imec</h2>
+    <p class="archive-project-summary">At imec’s CMST group at Ghent University, I modelled the optics and developed a procedure for positioning movable ball lenses to couple laser light into a chip waveguide.</p>
+    <div class="archive-project-grid">
+      <figure>
+        <a href="{{ '/assets/evidence/imec/movable-lenses.jpg' | relative_url }}">
+          <img src="{{ '/assets/evidence/imec/movable-lenses.jpg' | relative_url }}" width="1280" height="960" alt="A ball lens on its positioning tool with a 500 micrometre scale bar">
+        </a>
+        <figcaption><strong>Movable ball lens.</strong> This close-up shows a lens on the tool used to position it. The scale bar is 500 µm.</figcaption>
+      </figure>
+      <figure>
+        <a href="{{ '/assets/evidence/imec/optics-model.jpg' | relative_url }}">
+          <img src="{{ '/assets/evidence/imec/optics-model.jpg' | relative_url }}" width="2560" height="1529" alt="Optical model showing the beam path through two ball lenses in perpendicular views">
+        </a>
+        <figcaption><strong>Optical model.</strong> I modelled how light travels through the two lenses with the components at their intended positions.</figcaption>
+      </figure>
+    </div>
+    <figure class="archive-project-player">
+      <iframe class="archive-project-video" src="https://www.youtube-nocookie.com/embed/B5ln2s0bnAY" title="Photonic alignment machine running Jiaqi Chen’s pre-alignment procedure" loading="lazy" allow="encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      <figcaption><strong>Pre-alignment trial.</strong> My procedure uses progressively finer machine vision to find a safe starting position. <a href="https://www.youtube.com/watch?v=B5ln2s0bnAY">Watch on YouTube</a>.</figcaption>
+    </figure>
+  </section>
+
+  <section class="archive-project" id="cellular-automaton" aria-labelledby="cellular-automaton-title">
+    <h2 id="cellular-automaton-title">Regenerative neural cellular automaton</h2>
+    <p class="archive-project-summary">I reproduced the <a href="https://distill.pub/2020/growing-ca/">Growing Neural Cellular Automata</a> method in PyTorch using a Noto Emoji image as the target. I set up resumable training on a repurposed laptop and tested how the trained model grows and repairs the pattern.</p>
+    <figure class="archive-project-player">
+      <iframe class="archive-project-demo" src="{{ '/assets/evidence/demos/joy-checkpoint-5850-live/index.html' | relative_url }}" title="Interactive growth and regeneration demo" loading="lazy" sandbox="allow-scripts"></iframe>
+      <figcaption><strong>Growth and repair.</strong> Use Reset to grow the pattern from a seed. Click or drag across the grown pattern to erase cells and watch how the local update rule responds. <a href="{{ '/assets/evidence/demos/joy-checkpoint-5850-live/index.html' | relative_url }}">Open the demo in its own tab</a>.</figcaption>
+    </figure>
+  </section>
+
+  <section class="archive-project" id="shadow-ct" aria-labelledby="shadow-ct-title">
+    <h2 id="shadow-ct-title">Shadow CT scanner</h2>
+    <p class="archive-project-summary">My physics group at Imperial College London built a scanner that reconstructs objects from visible-light shadows. I worked on the reconstruction software and on getting the camera, turntable and electronics to work together. I set up the TIGRE reconstruction library on an NVIDIA GPU.</p>
+    <div class="archive-project-grid">
+      <figure>
+        <a href="{{ '/assets/evidence/ct-scanner/knight-shadow-apparatus.png' | relative_url }}">
+          <img src="{{ '/assets/evidence/ct-scanner/knight-shadow-apparatus.png' | relative_url }}" width="1912" height="1135" loading="lazy" alt="A chess knight on the scanner’s rotating platform casting a shadow on a screen">
+        </a>
+        <figcaption><strong>Scanning a knight.</strong> The piece sits on a rotating platform while a phone records its shadow from successive angles.</figcaption>
+      </figure>
+      <figure>
+        <a href="{{ '/assets/evidence/ct-scanner/poster-page-3.webp' | relative_url }}">
+          <img src="{{ '/assets/evidence/ct-scanner/poster-page-3.webp' | relative_url }}" width="2000" height="1500" loading="lazy" alt="Group poster results showing digital chess-piece reconstructions and examples of artefacts">
+        </a>
+        <figcaption><strong>Digital reconstructions.</strong> The results panel shows six reconstructed pieces and examples of reconstruction artefacts. <a href="{{ '/assets/evidence/ct-scanner/poster.pdf' | relative_url }}#page=3">Open the group poster (PDF)</a>.</figcaption>
+      </figure>
+      <figure>
+        <a href="{{ '/assets/evidence/ct-scanner/printed-chess-set.png' | relative_url }}">
+          <img src="{{ '/assets/evidence/ct-scanner/printed-chess-set.png' | relative_url }}" width="1107" height="467" loading="lazy" alt="Five dark 3D printed chess pieces in front of their five white originals">
+        </a>
+        <figcaption><strong>3D printed results.</strong> The dark pieces in front were printed from our reconstructions. The white pieces behind them are the originals.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="archive-project" id="wooden-tiles" aria-labelledby="wooden-tiles-title">
+    <h2 id="wooden-tiles-title">Modular wooden tiles</h2>
+    <p class="archive-project-summary">I designed a flat wooden tile with slots and notches that could be laser cut and assembled into three-dimensional structures. I used friction to hold the joints together and designed modules that could rotate.</p>
+    <div class="archive-project-grid">
+      <figure>
+        <a href="{{ '/assets/evidence/entrepreneur/single-tile.png' | relative_url }}">
+          <img src="{{ '/assets/evidence/entrepreneur/single-tile.png' | relative_url }}" width="1024" height="1024" loading="lazy" alt="A rendering of one wooden tile with four rectangular slots and notched edges">
+        </a>
+        <figcaption><strong>Tile design.</strong> The slots and notches let the same part connect in several orientations.</figcaption>
+      </figure>
+      <figure>
+        <a href="{{ '/assets/evidence/entrepreneur/house.jpg' | relative_url }}">
+          <img src="{{ '/assets/evidence/entrepreneur/house.jpg' | relative_url }}" width="960" height="1280" loading="lazy" alt="A model house built from interlocking wooden tiles">
+        </a>
+        <figcaption><strong>House build.</strong> The tiles form the walls and roof of a freestanding model.</figcaption>
+      </figure>
+      <figure>
+        <a href="{{ '/assets/evidence/entrepreneur/windmill.jpg' | relative_url }}">
+          <img src="{{ '/assets/evidence/entrepreneur/windmill.jpg' | relative_url }}" width="901" height="1280" loading="lazy" alt="A model windmill assembled from the same wooden tiles">
+        </a>
+        <figcaption><strong>Windmill build.</strong> The same parts form the tower and blades.</figcaption>
+      </figure>
+    </div>
+    <div class="archive-project-grid">
+      <figure>
+        <video class="archive-project-tower" src="{{ '/assets/evidence/entrepreneur/rotating-tower.mp4' | relative_url }}" width="1080" height="1920" controls playsinline preload="metadata" aria-label="Demonstration of a rotating wooden tile module"></video>
+        <figcaption><strong>Rotating module.</strong> This six-second clip shows the assembled joint moving by hand. <a href="{{ '/assets/evidence/entrepreneur/rotating-tower.mp4' | relative_url }}">Open the video</a>.</figcaption>
+      </figure>
+      <figure>
+        <a href="{{ '/assets/evidence/entrepreneur/registered-design-page-1.webp' | relative_url }}">
+          <img src="{{ '/assets/evidence/entrepreneur/registered-design-page-1.webp' | relative_url }}" loading="lazy" alt="Certificate for UK registered design 6429401">
+        </a>
+        <figcaption><strong>Design registration.</strong> The certificate records the tile design as UK registered design 6429401. <a href="{{ '/assets/evidence/entrepreneur/registered-design.pdf' | relative_url }}">Open the registration (PDF)</a>.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="archive-project" id="fibre-optics" aria-labelledby="fibre-optics-title">
+    <h2 id="fibre-optics-title">Fibre optics research</h2>
+    <p class="archive-project-summary">For my IB Physics extended essay, I used a second fibre on an alignment bench to sample the optical power from a single-mode fibre at different positions. I compared the measurements with a Gaussian beam model.</p>
+    <figure class="archive-project-player">
+      <a href="{{ '/assets/evidence/ib-physics/paper-page-16.webp' | relative_url }}">
+        <img src="{{ '/assets/evidence/ib-physics/paper-page-16.webp' | relative_url }}" loading="lazy" alt="Essay plot comparing measured optical power and a Gaussian model as the receiving fibre is displaced">
+      </a>
+      <figcaption><strong>Measured beam profile.</strong> The results show received power against fibre displacement, with uncertainty bars and a model curve. <a href="{{ '/assets/evidence/ib-physics/ib-physics-extended-essay.pdf' | relative_url }}">Read the essay (PDF)</a>.</figcaption>
+    </figure>
+  </section>
+</article>
